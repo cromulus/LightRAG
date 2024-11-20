@@ -23,12 +23,15 @@ from tenacity import (
 
 @dataclass
 class Neo4JStorage(BaseGraphStorage):
+    tenant_id: str = None
+
     @staticmethod
     def load_nx_graph(file_name):
         print("no preloading of graph with neo4j in production")
 
-    def __init__(self, namespace, global_config):
+    def __init__(self, namespace, global_config, tenant_id=None):
         super().__init__(namespace=namespace, global_config=global_config)
+        self.tenant_id = tenant_id
         self._driver = None
         self._driver_lock = asyncio.Lock()
         URI = os.environ["NEO4J_URI"]
@@ -61,9 +64,11 @@ class Neo4JStorage(BaseGraphStorage):
 
         async with self._driver.session() as session:
             query = (
-                f"MATCH (n:`{entity_name_label}`) RETURN count(n) > 0 AS node_exists"
+                f"MATCH (n:`{entity_name_label}`) "
+                f"WHERE n.tenant_id = $tenant_id "
+                "RETURN count(n) > 0 AS node_exists"
             )
-            result = await session.run(query)
+            result = await session.run(query, tenant_id=self.tenant_id)
             single_result = await result.single()
             logger.debug(
                 f'{inspect.currentframe().f_code.co_name}:query:{query}:result:{single_result["node_exists"]}'
@@ -227,14 +232,14 @@ class Neo4JStorage(BaseGraphStorage):
             node_data: Dictionary of node properties
         """
         label = node_id.strip('"')
-        properties = node_data
+        properties = {**node_data, "tenant_id": self.tenant_id}
 
         async def _do_upsert(tx: AsyncManagedTransaction):
             query = f"""
-            MERGE (n:`{label}`)
+            MERGE (n:`{label}` {{tenant_id: $tenant_id}})
             SET n += $properties
             """
-            await tx.run(query, properties=properties)
+            await tx.run(query, tenant_id=self.tenant_id, properties=properties)
             logger.debug(
                 f"Upserted node with label '{label}' and properties: {properties}"
             )

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Depends
 from pydantic import BaseModel
 import os
 from lightrag import LightRAG, QueryParam
@@ -28,6 +28,13 @@ print(f"EMBEDDING_MAX_TOKEN_SIZE: {EMBEDDING_MAX_TOKEN_SIZE}")
 if not os.path.exists(WORKING_DIR):
     os.mkdir(WORKING_DIR)
 
+# Store RAG instances per tenant
+rag_instances = {}
+
+async def get_tenant_rag(tenant_id: str):
+    if tenant_id not in rag_instances:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return rag_instances[tenant_id]
 
 # LLM model function
 
@@ -93,32 +100,55 @@ class Response(BaseModel):
     message: Optional[str] = None
 
 
+class TenantRequest(BaseModel):
+    tenant_id: str
+    # Other fields...
+
+
 # API routes
 
 
-@app.post("/query", response_model=Response)
-async def query_endpoint(request: QueryRequest):
+@app.post("/tenant/create")
+async def create_tenant(tenant_id: str):
+    if tenant_id in rag_instances:
+        raise HTTPException(status_code=400, detail="Tenant already exists")
+
+    # Create new RAG instance with tenant ID
+    rag = LightRAG(
+        working_dir=f"{WORKING_DIR}/{tenant_id}",
+        llm_model_func=llm_model_func,
+        kg="Neo4JStorage",
+        tenant_id=tenant_id  # Pass tenant ID to storage
+    )
+
+    rag_instances[tenant_id] = rag
+    return {"status": "success", "message": f"Tenant {tenant_id} created"}
+
+
+@app.post("/query")
+async def query_endpoint(
+    request: QueryRequest,
+    tenant_id: str,
+    rag: LightRAG = Depends(get_tenant_rag)
+):
     try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: rag.query(
-                request.query,
-                param=QueryParam(
-                    mode=request.mode, only_need_context=request.only_need_context
-                ),
-            ),
+        result = await rag.aquery(
+            request.query,
+            param=QueryParam(mode=request.mode)
         )
         return Response(status="success", data=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/insert", response_model=Response)
-async def insert_endpoint(request: InsertRequest):
+@app.post("/insert")
+async def insert_endpoint(
+    request: InsertRequest,
+    tenant_id: str,
+    rag: LightRAG = Depends(get_tenant_rag)
+):
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: rag.insert(request.text))
+        await rag.ainsert(request.text)
         return Response(status="success", message="Text inserted successfully")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
