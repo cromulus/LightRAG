@@ -23,9 +23,15 @@ from .base import (
 
 @dataclass
 class JsonKVStorage(BaseKVStorage):
+    tenant_id: str = None
+
     def __post_init__(self):
+        base_file = f"kv_store_{self.namespace}.json"
+        if self.tenant_id:
+            base_file = f"{self.tenant_id}_{base_file}"
+
         working_dir = self.global_config["working_dir"]
-        self._file_name = os.path.join(working_dir, f"kv_store_{self.namespace}.json")
+        self._file_name = os.path.join(working_dir, base_file)
         self._data = load_json(self._file_name) or {}
         logger.info(f"Load KV {self.namespace} with {len(self._data)} data")
 
@@ -160,6 +166,8 @@ class NanoVectorDBStorage(BaseVectorStorage):
 
 @dataclass
 class NetworkXStorage(BaseGraphStorage):
+    tenant_id: str = None
+
     @staticmethod
     def load_nx_graph(file_name) -> nx.Graph:
         if os.path.exists(file_name):
@@ -222,9 +230,15 @@ class NetworkXStorage(BaseGraphStorage):
         return fixed_graph
 
     def __post_init__(self):
+        base_file = f"graph_{self.namespace}.graphml"
+        if self.tenant_id:
+            base_file = f"{self.tenant_id}_{base_file}"
+
         self._graphml_xml_file = os.path.join(
-            self.global_config["working_dir"], f"graph_{self.namespace}.graphml"
+            self.global_config["working_dir"],
+            base_file
         )
+
         preloaded_graph = NetworkXStorage.load_nx_graph(self._graphml_xml_file)
         if preloaded_graph is not None:
             logger.info(

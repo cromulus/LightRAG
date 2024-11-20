@@ -166,6 +166,8 @@ class OracleDB:
 
 @dataclass
 class OracleKVStorage(BaseKVStorage):
+    tenant_id: str = None
+
     # should pass db object to self.db
     def __post_init__(self):
         self._data = {}
@@ -176,7 +178,11 @@ class OracleKVStorage(BaseKVStorage):
     async def get_by_id(self, id: str) -> Union[dict, None]:
         """根据 id 获取 doc_full 数据."""
         SQL = SQL_TEMPLATES["get_by_id_" + self.namespace]
-        params = {"workspace": self.db.workspace, "id": id}
+        params = {
+            "workspace": self.db.workspace,
+            "tenant_id": self.tenant_id,
+            "id": id
+        }
         # print("get_by_id:"+SQL)
         res = await self.db.query(SQL, params)
         if res:
@@ -227,6 +233,10 @@ class OracleKVStorage(BaseKVStorage):
 
     ################ INSERT METHODS ################
     async def upsert(self, data: dict[str, dict]):
+        # Add tenant_id to properties
+        if self.tenant_id:
+            for k, v in data.items():
+                v["tenant_id"] = self.tenant_id
         left_data = {k: v for k, v in data.items() if k not in self._data}
         self._data.update(left_data)
         # print(self._data)
@@ -434,7 +444,7 @@ class OracleGraphStorage(BaseGraphStorage):
 
     #################### query method #################
     async def has_node(self, node_id: str) -> bool:
-        """根据节点id检查节点是否存在"""
+        """根据节点id检查��点是否存在"""
         SQL = SQL_TEMPLATES["has_node"]
         params = {"workspace": self.db.workspace, "node_id": node_id}
         # print(SQL)
@@ -638,6 +648,25 @@ TABLES = {
 
 
 SQL_TEMPLATES = {
+    "get_by_id_full_docs": """
+        SELECT ID,NVL(content,'') as content
+        FROM LIGHTRAG_DOC_FULL
+        WHERE workspace=:workspace
+        AND (:tenant_id IS NULL OR tenant_id=:tenant_id)
+        AND ID=:id
+    """,
+
+    # Similar modifications for other queries to include tenant filtering
+    "merge_doc_full": """
+        MERGE INTO LIGHTRAG_DOC_FULL a
+        USING DUAL
+        ON (a.id = :check_id AND
+            (:tenant_id IS NULL OR a.tenant_id=:tenant_id))
+        WHEN NOT MATCHED THEN
+        INSERT(id,content,workspace,tenant_id)
+        values(:id,:content,:workspace,:tenant_id)
+    """,
+}
     # SQL for KVStorage
     "get_by_id_full_docs": "select ID,NVL(content,'') as content from LIGHTRAG_DOC_FULL where workspace=:workspace and ID=:id",
     "get_by_id_text_chunks": "select ID,TOKENS,NVL(content,'') as content,CHUNK_ORDER_INDEX,FULL_DOC_ID from LIGHTRAG_DOC_CHUNKS where workspace=:workspace and ID=:id",

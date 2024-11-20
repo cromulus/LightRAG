@@ -128,10 +128,22 @@ async def create_tenant(tenant_id: str):
 @app.post("/query")
 async def query_endpoint(
     request: QueryRequest,
-    tenant_id: str,
-    rag: LightRAG = Depends(get_tenant_rag)
+    tenant_id: Optional[str] = None,
+    rag: Optional[LightRAG] = None
 ):
     try:
+        if tenant_id:
+            if tenant_id not in rag_instances:
+                raise HTTPException(status_code=404, detail="Tenant not found")
+            rag = rag_instances[tenant_id]
+        else:
+            # Use default RAG instance
+            if not rag:
+                rag = LightRAG(
+                    working_dir=WORKING_DIR,
+                    llm_model_func=llm_model_func
+                )
+
         result = await rag.aquery(
             request.query,
             param=QueryParam(mode=request.mode)

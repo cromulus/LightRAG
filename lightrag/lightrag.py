@@ -68,6 +68,7 @@ class LightRAG:
     working_dir: str = field(
         default_factory=lambda: f"./lightrag_cache_{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}"
     )
+    tenant_id: str = None
 
     kv_storage: str = field(default="JsonKVStorage")
     vector_storage: str = field(default="NanoVectorDBStorage")
@@ -141,6 +142,9 @@ class LightRAG:
             self.graph_storage
         ]
 
+        if self.tenant_id:
+            self.working_dir = os.path.join(self.working_dir, self.tenant_id)
+
         if not os.path.exists(self.working_dir):
             logger.info(f"Creating working directory {self.working_dir}")
             os.makedirs(self.working_dir)
@@ -166,14 +170,18 @@ class LightRAG:
             namespace="full_docs",
             global_config=asdict(self),
             embedding_func=self.embedding_func,
+            tenant_id=self.tenant_id
         )
         self.text_chunks = self.key_string_value_json_storage_cls(
             namespace="text_chunks",
             global_config=asdict(self),
             embedding_func=self.embedding_func,
+            tenant_id=self.tenant_id
         )
         self.chunk_entity_relation_graph = self.graph_storage_cls(
-            namespace="chunk_entity_relation", global_config=asdict(self)
+            namespace="chunk_entity_relation",
+            global_config=asdict(self),
+            tenant_id=self.tenant_id
         )
         ####
         # add embedding func by walter over
