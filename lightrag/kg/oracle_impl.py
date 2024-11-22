@@ -425,7 +425,7 @@ class OracleGraphStorage(BaseGraphStorage):
         return await self._node_embed_algorithms[algorithm]()
 
     async def _node2vec_embed(self):
-        """为节点生成向量"""
+        """为���点生成向量"""
         from graspologic import embed
 
         embeddings, nodes = embed.node2vec_embed(
@@ -444,7 +444,7 @@ class OracleGraphStorage(BaseGraphStorage):
 
     #################### query method #################
     async def has_node(self, node_id: str) -> bool:
-        """根据节点id检查��点是否存在"""
+        """根据节点id检查点是否存在"""
         SQL = SQL_TEMPLATES["has_node"]
         params = {"workspace": self.db.workspace, "node_id": node_id}
         # print(SQL)
@@ -648,25 +648,6 @@ TABLES = {
 
 
 SQL_TEMPLATES = {
-    "get_by_id_full_docs": """
-        SELECT ID,NVL(content,'') as content
-        FROM LIGHTRAG_DOC_FULL
-        WHERE workspace=:workspace
-        AND (:tenant_id IS NULL OR tenant_id=:tenant_id)
-        AND ID=:id
-    """,
-
-    # Similar modifications for other queries to include tenant filtering
-    "merge_doc_full": """
-        MERGE INTO LIGHTRAG_DOC_FULL a
-        USING DUAL
-        ON (a.id = :check_id AND
-            (:tenant_id IS NULL OR a.tenant_id=:tenant_id))
-        WHEN NOT MATCHED THEN
-        INSERT(id,content,workspace,tenant_id)
-        values(:id,:content,:workspace,:tenant_id)
-    """,
-}
     # SQL for KVStorage
     "get_by_id_full_docs": "select ID,NVL(content,'') as content from LIGHTRAG_DOC_FULL where workspace=:workspace and ID=:id",
     "get_by_id_text_chunks": "select ID,TOKENS,NVL(content,'') as content,CHUNK_ORDER_INDEX,FULL_DOC_ID from LIGHTRAG_DOC_CHUNKS where workspace=:workspace and ID=:id",
@@ -675,9 +656,11 @@ SQL_TEMPLATES = {
     "filter_keys": "select id from {table_name} where workspace=:workspace and id in ({ids})",
     "merge_doc_full": """ MERGE INTO LIGHTRAG_DOC_FULL a
                     USING DUAL
-                    ON (a.id = :check_id)
+                    ON (a.id = :check_id AND
+                        (:tenant_id IS NULL OR a.tenant_id=:tenant_id))
                     WHEN NOT MATCHED THEN
-                    INSERT(id,content,workspace) values(:id,:content,:workspace)
+                    INSERT(id,content,workspace,tenant_id)
+                    values(:id,:content,:workspace,:tenant_id)
                     """,
     "merge_chunk": """MERGE INTO LIGHTRAG_DOC_CHUNKS a
                     USING DUAL
