@@ -3,6 +3,7 @@ aioboto3
 aiohttp
 
 # database packages
+asyncpg
 graspologic
 hnswlib
 nano-vectordb
@@ -20,6 +21,12 @@ tiktoken
 torch
 transformers
 xxhash
+
+# server packages
+fastapi
+uvicorn
+python-multipart
+nest_asyncio
 
 # Testing packages
 pytest

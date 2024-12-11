@@ -16,3 +16,4 @@ venv/
 .coverage
 .envrc
 .vscode
+index_default/
