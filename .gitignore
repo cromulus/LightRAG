@@ -12,3 +12,7 @@ ignore_this.txt
 .venv/
 *.ignore.*
 .ruff_cache/
+venv/
+.coverage
+.envrc
+.vscode
