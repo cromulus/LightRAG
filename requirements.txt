@@ -20,3 +20,10 @@ tiktoken
 torch
 transformers
 xxhash
+
+# Testing packages
+pytest
+pytest-cov
+pytest-vcr
+pytest-asyncio
+vcrpy
