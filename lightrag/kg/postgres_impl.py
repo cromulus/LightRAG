@@ -203,11 +203,9 @@ class PostgresVectorDBStorage(BaseVectorStorage):
 
         # Get query embedding
         embeddings = await self.embedding_func([query])
-        # Convert numpy array to vector string format
         query_vector = f"[{','.join(str(x) for x in embeddings[0].tolist())}]"
 
         async with pool.acquire() as conn:
-            # Query similar vectors using cosine similarity
             rows = await conn.fetch('''
                 SELECT id, content, metadata,
                        1 - (embedding <=> $3::vector) as similarity
@@ -222,10 +220,11 @@ class PostgresVectorDBStorage(BaseVectorStorage):
                 result = {
                     'id': row['id'],
                     'content': row['content'],
-                    'distance': 1 - row['similarity']  # Convert similarity to distance
+                    'distance': 1 - row['similarity']
                 }
-                if row['metadata']:
-                    result.update(row['metadata'])
+                # Parse metadata JSON and update result
+                metadata = json.loads(row['metadata']) if row['metadata'] else {}
+                result.update(metadata)
                 results.append(result)
 
             return results

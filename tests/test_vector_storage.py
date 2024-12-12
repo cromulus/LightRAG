@@ -45,6 +45,8 @@ class BaseVectorStorageTest:
 
         yield storage
         await storage.drop()
+        if hasattr(storage, 'pool') and storage.pool:
+            await storage.pool.close()
 
     @pytest.mark.asyncio
     async def test_basic_operations(self, storage):
@@ -170,6 +172,4 @@ class TestPostgresVectorDBStorage(BaseVectorStorageTest):
         await setup_postgres()
         await asyncio.sleep(1)
         yield
-        if storage and storage.pool:
-            await storage.pool.close()
 
