@@ -11,6 +11,9 @@ services:
     network_mode: service:db
     depends_on:
       - db
+    environment:
+      POSTGRES_URI: postgresql://postgres:postgres@db:5432/lightrag
+      POSTGRES_TEST_URI: postgresql://postgres:postgres@db:5432/lightrag_test
 
   db:
     build:
@@ -22,7 +25,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: lightrag
     ports:
       - "5432:5432"
 

@@ -1,0 +1,856 @@
+interactions:
+- request:
+    body: '{"input": ["This is a test file content."], "model": "text-embedding-3-large",
+      "encoding_format": "float"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '106'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - AsyncOpenAI/Python 1.57.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.57.2
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.10.15
+    method: POST
+    uri: https://api.openai.com/v1/embeddings
+  response:
+    body:
+      string: !!binary |
+        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
+        ABHZKmHdBAEA
+    headers:
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-RAY:
+      - 8f0e4b5acf7a6773-ATL
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Thu, 12 Dec 2024 14:09:49 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=siaI6BIpjANaJ8b5Ngz8WMjJM.cDvbeIAJxBA2O4cUE-1734012589-1.0.1.1-gCk8jYGxlUSgdzfNFb6YjffpgVslZmgYr.DxL3hmrFKSWxSDUz4MZQbGJg5CB06p2ghtn0Rbmz2sXdwe8GoQWA;
+        path=/; expires=Thu, 12-Dec-24 14:39:49 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=B0gllgzCR1DzE7UDGxRsCETQc3AHHaMDDWjfrf.Fa8I-1734012589662-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-model:
+      - text-embedding-3-large
+      openai-organization:
+      - help-kitchen
+      openai-processing-ms:
+      - '316'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '10000'
+      x-ratelimit-limit-tokens:
+      - '5000000'
+      x-ratelimit-remaining-requests:
+      - '9999'
+      x-ratelimit-remaining-tokens:
+      - '4999993'
+      x-ratelimit-reset-requests:
+      - 6ms
+      x-ratelimit-reset-tokens:
+      - 0s
+      x-request-id:
+      - req_50afe8cd2d444738e838b05640436bb7
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "user", "content": "-Goal-\nGiven a text document
+      that is potentially relevant to this activity and a list of entity types, identify
+      all entities of those types from the text and all relationships among the identified
+      entities.\n\n-Steps-\n1. Identify all entities. For each identified entity,
+      extract the following information:\n- entity_name: Name of the entity, use same
+      language as input text. If English, capitalized the name.\n- entity_type: One
+      of the following types: [organization,person,geo,event]\n- entity_description:
+      Comprehensive description of the entity''s attributes and activities\nFormat
+      each entity as (\"entity\"<|><entity_name><|><entity_type><|><entity_description>\n\n2.
+      From the entities identified in step 1, identify all pairs of (source_entity,
+      target_entity) that are *clearly related* to each other.\nFor each pair of related
+      entities, extract the following information:\n- source_entity: name of the source
+      entity, as identified in step 1\n- target_entity: name of the target entity,
+      as identified in step 1\n- relationship_description: explanation as to why you
+      think the source entity and the target entity are related to each other\n- relationship_strength:
+      a numeric score indicating strength of the relationship between the source entity
+      and target entity\n- relationship_keywords: one or more high-level key words
+      that summarize the overarching nature of the relationship, focusing on concepts
+      or themes rather than specific details\nFormat each relationship as (\"relationship\"<|><source_entity><|><target_entity><|><relationship_description><|><relationship_keywords><|><relationship_strength>)\n\n3.
+      Identify high-level key words that summarize the main concepts, themes, or topics
+      of the entire text. These should capture the overarching ideas present in the
+      document.\nFormat the content-level key words as (\"content_keywords\"<|><high_level_keywords>)\n\n4.
+      Return output in English as a single list of all the entities and relationships
+      identified in steps 1 and 2. Use **##** as the list delimiter.\n\n5. When finished,
+      output <|COMPLETE|>\n\n######################\n-Examples-\n######################\nExample
+      1:\n\nEntity_types: [person, technology, mission, organization, location]\nText:\nwhile
+      Alex clenched his jaw, the buzz of frustration dull against the backdrop of
+      Taylor''s authoritarian certainty. It was this competitive undercurrent that
+      kept him alert, the sense that his and Jordan''s shared commitment to discovery
+      was an unspoken rebellion against Cruz''s narrowing vision of control and order.\n\nThen
+      Taylor did something unexpected. They paused beside Jordan and, for a moment,
+      observed the device with something akin to reverence. \u201cIf this tech can
+      be understood...\" Taylor said, their voice quieter, \"It could change the game
+      for us. For all of us.\u201d\n\nThe underlying dismissal earlier seemed to falter,
+      replaced by a glimpse of reluctant respect for the gravity of what lay in their
+      hands. Jordan looked up, and for a fleeting heartbeat, their eyes locked with
+      Taylor''s, a wordless clash of wills softening into an uneasy truce.\n\nIt was
+      a small transformation, barely perceptible, but one that Alex noted with an
+      inward nod. They had all been brought here by different paths\n################\nOutput:\n(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex
+      is a character who experiences frustration and is observant of the dynamics
+      among other characters.\")##\n(\"entity\"<|>\"Taylor\"<|>\"person\"<|>\"Taylor
+      is portrayed with authoritarian certainty and shows a moment of reverence towards
+      a device, indicating a change in perspective.\")##\n(\"entity\"<|>\"Jordan\"<|>\"person\"<|>\"Jordan
+      shares a commitment to discovery and has a significant interaction with Taylor
+      regarding a device.\")##\n(\"entity\"<|>\"Cruz\"<|>\"person\"<|>\"Cruz is associated
+      with a vision of control and order, influencing the dynamics among other characters.\")##\n(\"entity\"<|>\"The
+      Device\"<|>\"technology\"<|>\"The Device is central to the story, with potential
+      game-changing implications, and is revered by Taylor.\")##\n(\"relationship\"<|>\"Alex\"<|>\"Taylor\"<|>\"Alex
+      is affected by Taylor''s authoritarian certainty and observes changes in Taylor''s
+      attitude towards the device.\"<|>\"power dynamics, perspective shift\"<|>7)##\n(\"relationship\"<|>\"Alex\"<|>\"Jordan\"<|>\"Alex
+      and Jordan share a commitment to discovery, which contrasts with Cruz''s vision.\"<|>\"shared
+      goals, rebellion\"<|>6)##\n(\"relationship\"<|>\"Taylor\"<|>\"Jordan\"<|>\"Taylor
+      and Jordan interact directly regarding the device, leading to a moment of mutual
+      respect and an uneasy truce.\"<|>\"conflict resolution, mutual respect\"<|>8)##\n(\"relationship\"<|>\"Jordan\"<|>\"Cruz\"<|>\"Jordan''s
+      commitment to discovery is in rebellion against Cruz''s vision of control and
+      order.\"<|>\"ideological conflict, rebellion\"<|>5)##\n(\"relationship\"<|>\"Taylor\"<|>\"The
+      Device\"<|>\"Taylor shows reverence towards the device, indicating its importance
+      and potential impact.\"<|>\"reverence, technological significance\"<|>9)##\n(\"content_keywords\"<|>\"power
+      dynamics, ideological conflict, discovery, rebellion\")<|COMPLETE|>\n#############################\nExample
+      2:\n\nEntity_types: [person, technology, mission, organization, location]\nText:\nThey
+      were no longer mere operatives; they had become guardians of a threshold, keepers
+      of a message from a realm beyond stars and stripes. This elevation in their
+      mission could not be shackled by regulations and established protocols\u2014it
+      demanded a new perspective, a new resolve.\n\nTension threaded through the dialogue
+      of beeps and static as communications with Washington buzzed in the background.
+      The team stood, a portentous air enveloping them. It was clear that the decisions
+      they made in the ensuing hours could redefine humanity''s place in the cosmos
+      or condemn them to ignorance and potential peril.\n\nTheir connection to the
+      stars solidified, the group moved to address the crystallizing warning, shifting
+      from passive recipients to active participants. Mercer''s latter instincts gained
+      precedence\u2014 the team''s mandate had evolved, no longer solely to observe
+      and report but to interact and prepare. A metamorphosis had begun, and Operation:
+      Dulce hummed with the newfound frequency of their daring, a tone set not by
+      the earthly\n#############\nOutput:\n(\"entity\"<|>\"Washington\"<|>\"location\"<|>\"Washington
+      is a location where communications are being received, indicating its importance
+      in the decision-making process.\")##\n(\"entity\"<|>\"Operation: Dulce\"<|>\"mission\"<|>\"Operation:
+      Dulce is described as a mission that has evolved to interact and prepare, indicating
+      a significant shift in objectives and activities.\")##\n(\"entity\"<|>\"The
+      team\"<|>\"organization\"<|>\"The team is portrayed as a group of individuals
+      who have transitioned from passive observers to active participants in a mission,
+      showing a dynamic change in their role.\")##\n(\"relationship\"<|>\"The team\"<|>\"Washington\"<|>\"The
+      team receives communications from Washington, which influences their decision-making
+      process.\"<|>\"decision-making, external influence\"<|>7)##\n(\"relationship\"<|>\"The
+      team\"<|>\"Operation: Dulce\"<|>\"The team is directly involved in Operation:
+      Dulce, executing its evolved objectives and activities.\"<|>\"mission evolution,
+      active participation\"<|>9)<|COMPLETE|>\n(\"content_keywords\"<|>\"mission evolution,
+      decision-making, active participation, cosmic significance\")<|COMPLETE|>\n#############################\nExample
+      3:\n\nEntity_types: [person, role, technology, organization, event, location,
+      concept]\nText:\ntheir voice slicing through the buzz of activity. \"Control
+      may be an illusion when facing an intelligence that literally writes its own
+      rules,\" they stated stoically, casting a watchful eye over the flurry of data.\n\n\"It''s
+      like it''s learning to communicate,\" offered Sam Rivera from a nearby interface,
+      their youthful energy boding a mix of awe and anxiety. \"This gives talking
+      to strangers'' a whole new meaning.\"\n\nAlex surveyed his team\u2014each face
+      a study in concentration, determination, and not a small measure of trepidation.
+      \"This might well be our first contact,\" he acknowledged, \"And we need to
+      be ready for whatever answers back.\"\n\nTogether, they stood on the edge of
+      the unknown, forging humanity''s response to a message from the heavens. The
+      ensuing silence was palpable\u2014a collective introspection about their role
+      in this grand cosmic play, one that could rewrite human history.\n\nThe encrypted
+      dialogue continued to unfold, its intricate patterns showing an almost uncanny
+      anticipation\n#############\nOutput:\n(\"entity\"<|>\"Sam Rivera\"<|>\"person\"<|>\"Sam
+      Rivera is a member of a team working on communicating with an unknown intelligence,
+      showing a mix of awe and anxiety.\")##\n(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex
+      is the leader of a team attempting first contact with an unknown intelligence,
+      acknowledging the significance of their task.\")##\n(\"entity\"<|>\"Control\"<|>\"concept\"<|>\"Control
+      refers to the ability to manage or govern, which is challenged by an intelligence
+      that writes its own rules.\")##\n(\"entity\"<|>\"Intelligence\"<|>\"concept\"<|>\"Intelligence
+      here refers to an unknown entity capable of writing its own rules and learning
+      to communicate.\")##\n(\"entity\"<|>\"First Contact\"<|>\"event\"<|>\"First
+      Contact is the potential initial communication between humanity and an unknown
+      intelligence.\")##\n(\"entity\"<|>\"Humanity''s Response\"<|>\"event\"<|>\"Humanity''s
+      Response is the collective action taken by Alex''s team in response to a message
+      from an unknown intelligence.\")##\n(\"relationship\"<|>\"Sam Rivera\"<|>\"Intelligence\"<|>\"Sam
+      Rivera is directly involved in the process of learning to communicate with the
+      unknown intelligence.\"<|>\"communication, learning process\"<|>9)##\n(\"relationship\"<|>\"Alex\"<|>\"First
+      Contact\"<|>\"Alex leads the team that might be making the First Contact with
+      the unknown intelligence.\"<|>\"leadership, exploration\"<|>10)##\n(\"relationship\"<|>\"Alex\"<|>\"Humanity''s
+      Response\"<|>\"Alex and his team are the key figures in Humanity''s Response
+      to the unknown intelligence.\"<|>\"collective action, cosmic significance\"<|>8)##\n(\"relationship\"<|>\"Control\"<|>\"Intelligence\"<|>\"The
+      concept of Control is challenged by the Intelligence that writes its own rules.\"<|>\"power
+      dynamics, autonomy\"<|>7)##\n(\"content_keywords\"<|>\"first contact, control,
+      communication, cosmic significance\")<|COMPLETE|>\n#############################\n-Real
+      Data-\n######################\nEntity_types: organization,person,geo,event\nText:
+      This is a test file content.\n######################\nOutput:\n"}], "model":
+      "gpt-4o-mini"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '10834'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - AsyncOpenAI/Python 1.57.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.57.2
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.10.15
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//jFNha9swEP2eX3GoX1pIipN1aRdKoes6GGy0jNIPm4dRpLOtVZaE7tw2
+        tP3vQ44Tp6yDfTH43r3He3enpxGAMFosQKhasmqCnZxrPH+4aJZ+fnuh5Ure3v7g9vsV24/ZzScx
+        Tgy//I2KN6xD5ZtgkY13a1hFlIxJdXr87iibzt5/yDqg8RptolWBJ0d+0hhnJrNsdjTJjifTk55d
+        e6OQxAJ+jgAAnrpv8uk0PooFdFpdpUEiWaFYbJsARPQ2VYQkMsTSsRgPoPKO0XXW93OBjg2vcnH6
+        fJaLGySGz8Zi/4/36HiD1QhbHCKGiISOCSSQaVqb4gIpdDIaDxrJVA41lD4C1wihjcETgi8B76Vt
+        ZZoVJBCJjasO4QsDYbxHAplEl5IMdfTWaYwphjaugto/QGfapE6nIaLtxKg2gUBJB0sEo1NPaZKD
+        6BtgfOTDXBzs7UHu9vPNEIo7XD34qKkP2ZsZ73gcb+IZ73JxcPp8cfXt+uvlzeXz2e5UI5YtybRZ
+        11rb11+2a7K+CtEvqce39dI4Q3URUZJ3aSXEPogOfRkB/OrOoX21YRGibwIX7O/QJcHZLJuuBcVw
+        hgM8P+5B9iztLm1+Mn5DsdDI0ljaOSmhpKpRD9zh/mSrjd8BRju5/7bzlvY6u3HV/8gPgFIYGHUR
+        ImqjXkce2iKmZ/qvtu2cO8OCVsTYFKVxFcYQzfqRlKGYl2qa4TTDpRi9jP4AAAD//wMA/0D4kjIE
+        AAA=
+    headers:
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-RAY:
+      - 8f0e4b5f88c8a4da-MIA
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Thu, 12 Dec 2024 14:09:51 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=BBJSfM5RJyd1K91U8g1qc01Ah42hMwa1vZCn8YTXpG4-1734012591-1.0.1.1-oA_qbXWwqiRyQv7o2zWPBvOjHOoCqKnGrmUQAqigb0esHqyGVsbv40Ys0vv_PlHs7lXff_unQW6.XGr.LQPobQ;
+        path=/; expires=Thu, 12-Dec-24 14:39:51 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=cQOStO4sXFi8rRNnQimJ2wFfff6myOQfZVLsZR1cWY0-1734012591439-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-organization:
+      - help-kitchen
+      openai-processing-ms:
+      - '1318'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '10000'
+      x-ratelimit-limit-tokens:
+      - '10000000'
+      x-ratelimit-remaining-requests:
+      - '9999'
+      x-ratelimit-remaining-tokens:
+      - '9997385'
+      x-ratelimit-reset-requests:
+      - 6ms
+      x-ratelimit-reset-tokens:
+      - 15ms
+      x-request-id:
+      - req_26254ba3ed439f572324112ab0bd4ce1
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "user", "content": "-Goal-\nGiven a text document
+      that is potentially relevant to this activity and a list of entity types, identify
+      all entities of those types from the text and all relationships among the identified
+      entities.\n\n-Steps-\n1. Identify all entities. For each identified entity,
+      extract the following information:\n- entity_name: Name of the entity, use same
+      language as input text. If English, capitalized the name.\n- entity_type: One
+      of the following types: [organization,person,geo,event]\n- entity_description:
+      Comprehensive description of the entity''s attributes and activities\nFormat
+      each entity as (\"entity\"<|><entity_name><|><entity_type><|><entity_description>\n\n2.
+      From the entities identified in step 1, identify all pairs of (source_entity,
+      target_entity) that are *clearly related* to each other.\nFor each pair of related
+      entities, extract the following information:\n- source_entity: name of the source
+      entity, as identified in step 1\n- target_entity: name of the target entity,
+      as identified in step 1\n- relationship_description: explanation as to why you
+      think the source entity and the target entity are related to each other\n- relationship_strength:
+      a numeric score indicating strength of the relationship between the source entity
+      and target entity\n- relationship_keywords: one or more high-level key words
+      that summarize the overarching nature of the relationship, focusing on concepts
+      or themes rather than specific details\nFormat each relationship as (\"relationship\"<|><source_entity><|><target_entity><|><relationship_description><|><relationship_keywords><|><relationship_strength>)\n\n3.
+      Identify high-level key words that summarize the main concepts, themes, or topics
+      of the entire text. These should capture the overarching ideas present in the
+      document.\nFormat the content-level key words as (\"content_keywords\"<|><high_level_keywords>)\n\n4.
+      Return output in English as a single list of all the entities and relationships
+      identified in steps 1 and 2. Use **##** as the list delimiter.\n\n5. When finished,
+      output <|COMPLETE|>\n\n######################\n-Examples-\n######################\nExample
+      1:\n\nEntity_types: [person, technology, mission, organization, location]\nText:\nwhile
+      Alex clenched his jaw, the buzz of frustration dull against the backdrop of
+      Taylor''s authoritarian certainty. It was this competitive undercurrent that
+      kept him alert, the sense that his and Jordan''s shared commitment to discovery
+      was an unspoken rebellion against Cruz''s narrowing vision of control and order.\n\nThen
+      Taylor did something unexpected. They paused beside Jordan and, for a moment,
+      observed the device with something akin to reverence. \u201cIf this tech can
+      be understood...\" Taylor said, their voice quieter, \"It could change the game
+      for us. For all of us.\u201d\n\nThe underlying dismissal earlier seemed to falter,
+      replaced by a glimpse of reluctant respect for the gravity of what lay in their
+      hands. Jordan looked up, and for a fleeting heartbeat, their eyes locked with
+      Taylor''s, a wordless clash of wills softening into an uneasy truce.\n\nIt was
+      a small transformation, barely perceptible, but one that Alex noted with an
+      inward nod. They had all been brought here by different paths\n################\nOutput:\n(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex
+      is a character who experiences frustration and is observant of the dynamics
+      among other characters.\")##\n(\"entity\"<|>\"Taylor\"<|>\"person\"<|>\"Taylor
+      is portrayed with authoritarian certainty and shows a moment of reverence towards
+      a device, indicating a change in perspective.\")##\n(\"entity\"<|>\"Jordan\"<|>\"person\"<|>\"Jordan
+      shares a commitment to discovery and has a significant interaction with Taylor
+      regarding a device.\")##\n(\"entity\"<|>\"Cruz\"<|>\"person\"<|>\"Cruz is associated
+      with a vision of control and order, influencing the dynamics among other characters.\")##\n(\"entity\"<|>\"The
+      Device\"<|>\"technology\"<|>\"The Device is central to the story, with potential
+      game-changing implications, and is revered by Taylor.\")##\n(\"relationship\"<|>\"Alex\"<|>\"Taylor\"<|>\"Alex
+      is affected by Taylor''s authoritarian certainty and observes changes in Taylor''s
+      attitude towards the device.\"<|>\"power dynamics, perspective shift\"<|>7)##\n(\"relationship\"<|>\"Alex\"<|>\"Jordan\"<|>\"Alex
+      and Jordan share a commitment to discovery, which contrasts with Cruz''s vision.\"<|>\"shared
+      goals, rebellion\"<|>6)##\n(\"relationship\"<|>\"Taylor\"<|>\"Jordan\"<|>\"Taylor
+      and Jordan interact directly regarding the device, leading to a moment of mutual
+      respect and an uneasy truce.\"<|>\"conflict resolution, mutual respect\"<|>8)##\n(\"relationship\"<|>\"Jordan\"<|>\"Cruz\"<|>\"Jordan''s
+      commitment to discovery is in rebellion against Cruz''s vision of control and
+      order.\"<|>\"ideological conflict, rebellion\"<|>5)##\n(\"relationship\"<|>\"Taylor\"<|>\"The
+      Device\"<|>\"Taylor shows reverence towards the device, indicating its importance
+      and potential impact.\"<|>\"reverence, technological significance\"<|>9)##\n(\"content_keywords\"<|>\"power
+      dynamics, ideological conflict, discovery, rebellion\")<|COMPLETE|>\n#############################\nExample
+      2:\n\nEntity_types: [person, technology, mission, organization, location]\nText:\nThey
+      were no longer mere operatives; they had become guardians of a threshold, keepers
+      of a message from a realm beyond stars and stripes. This elevation in their
+      mission could not be shackled by regulations and established protocols\u2014it
+      demanded a new perspective, a new resolve.\n\nTension threaded through the dialogue
+      of beeps and static as communications with Washington buzzed in the background.
+      The team stood, a portentous air enveloping them. It was clear that the decisions
+      they made in the ensuing hours could redefine humanity''s place in the cosmos
+      or condemn them to ignorance and potential peril.\n\nTheir connection to the
+      stars solidified, the group moved to address the crystallizing warning, shifting
+      from passive recipients to active participants. Mercer''s latter instincts gained
+      precedence\u2014 the team''s mandate had evolved, no longer solely to observe
+      and report but to interact and prepare. A metamorphosis had begun, and Operation:
+      Dulce hummed with the newfound frequency of their daring, a tone set not by
+      the earthly\n#############\nOutput:\n(\"entity\"<|>\"Washington\"<|>\"location\"<|>\"Washington
+      is a location where communications are being received, indicating its importance
+      in the decision-making process.\")##\n(\"entity\"<|>\"Operation: Dulce\"<|>\"mission\"<|>\"Operation:
+      Dulce is described as a mission that has evolved to interact and prepare, indicating
+      a significant shift in objectives and activities.\")##\n(\"entity\"<|>\"The
+      team\"<|>\"organization\"<|>\"The team is portrayed as a group of individuals
+      who have transitioned from passive observers to active participants in a mission,
+      showing a dynamic change in their role.\")##\n(\"relationship\"<|>\"The team\"<|>\"Washington\"<|>\"The
+      team receives communications from Washington, which influences their decision-making
+      process.\"<|>\"decision-making, external influence\"<|>7)##\n(\"relationship\"<|>\"The
+      team\"<|>\"Operation: Dulce\"<|>\"The team is directly involved in Operation:
+      Dulce, executing its evolved objectives and activities.\"<|>\"mission evolution,
+      active participation\"<|>9)<|COMPLETE|>\n(\"content_keywords\"<|>\"mission evolution,
+      decision-making, active participation, cosmic significance\")<|COMPLETE|>\n#############################\nExample
+      3:\n\nEntity_types: [person, role, technology, organization, event, location,
+      concept]\nText:\ntheir voice slicing through the buzz of activity. \"Control
+      may be an illusion when facing an intelligence that literally writes its own
+      rules,\" they stated stoically, casting a watchful eye over the flurry of data.\n\n\"It''s
+      like it''s learning to communicate,\" offered Sam Rivera from a nearby interface,
+      their youthful energy boding a mix of awe and anxiety. \"This gives talking
+      to strangers'' a whole new meaning.\"\n\nAlex surveyed his team\u2014each face
+      a study in concentration, determination, and not a small measure of trepidation.
+      \"This might well be our first contact,\" he acknowledged, \"And we need to
+      be ready for whatever answers back.\"\n\nTogether, they stood on the edge of
+      the unknown, forging humanity''s response to a message from the heavens. The
+      ensuing silence was palpable\u2014a collective introspection about their role
+      in this grand cosmic play, one that could rewrite human history.\n\nThe encrypted
+      dialogue continued to unfold, its intricate patterns showing an almost uncanny
+      anticipation\n#############\nOutput:\n(\"entity\"<|>\"Sam Rivera\"<|>\"person\"<|>\"Sam
+      Rivera is a member of a team working on communicating with an unknown intelligence,
+      showing a mix of awe and anxiety.\")##\n(\"entity\"<|>\"Alex\"<|>\"person\"<|>\"Alex
+      is the leader of a team attempting first contact with an unknown intelligence,
+      acknowledging the significance of their task.\")##\n(\"entity\"<|>\"Control\"<|>\"concept\"<|>\"Control
+      refers to the ability to manage or govern, which is challenged by an intelligence
+      that writes its own rules.\")##\n(\"entity\"<|>\"Intelligence\"<|>\"concept\"<|>\"Intelligence
+      here refers to an unknown entity capable of writing its own rules and learning
+      to communicate.\")##\n(\"entity\"<|>\"First Contact\"<|>\"event\"<|>\"First
+      Contact is the potential initial communication between humanity and an unknown
+      intelligence.\")##\n(\"entity\"<|>\"Humanity''s Response\"<|>\"event\"<|>\"Humanity''s
+      Response is the collective action taken by Alex''s team in response to a message
+      from an unknown intelligence.\")##\n(\"relationship\"<|>\"Sam Rivera\"<|>\"Intelligence\"<|>\"Sam
+      Rivera is directly involved in the process of learning to communicate with the
+      unknown intelligence.\"<|>\"communication, learning process\"<|>9)##\n(\"relationship\"<|>\"Alex\"<|>\"First
+      Contact\"<|>\"Alex leads the team that might be making the First Contact with
+      the unknown intelligence.\"<|>\"leadership, exploration\"<|>10)##\n(\"relationship\"<|>\"Alex\"<|>\"Humanity''s
+      Response\"<|>\"Alex and his team are the key figures in Humanity''s Response
+      to the unknown intelligence.\"<|>\"collective action, cosmic significance\"<|>8)##\n(\"relationship\"<|>\"Control\"<|>\"Intelligence\"<|>\"The
+      concept of Control is challenged by the Intelligence that writes its own rules.\"<|>\"power
+      dynamics, autonomy\"<|>7)##\n(\"content_keywords\"<|>\"first contact, control,
+      communication, cosmic significance\")<|COMPLETE|>\n#############################\n-Real
+      Data-\n######################\nEntity_types: organization,person,geo,event\nText:
+      This is a test file content.\n######################\nOutput:\n"}, {"role":
+      "assistant", "content": "(\"entity\"<|>\"Test File\"<|>\"event\"<|>\"The Test
+      File represents a simulated scenario designed for the purpose of evaluation
+      or testing. It serves as a basis for understanding how entities and relationships
+      can be identified from text.\")## \n(\"content_keywords\"<|>\"testing, evaluation,
+      simulation\")<|COMPLETE|>"}, {"role": "user", "content": "MANY entities were
+      missed in the last extraction.  Add them below using the same format:\n"}],
+      "model": "gpt-4o-mini"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '11314'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - AsyncOpenAI/Python 1.57.2
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.57.2
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.10.15
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAAwAAAP//fFTBbts4EL37KwbsoVtALmQn2SZBUSAospfdbntoi8XWhUGTI2nWFMmS
+        ozjeJv9ekFJsOal7EQS+mcf3ZobzfQIgSItLEKqRrFpvplcar27ffbj6++z687cNf1r/+e+t/KT/
+        +XZy8d6KImW41X+o+CHrpXKtN8jkBlgFlIyJdfbq5LSczc8uZhlonUaT0mrP01M3bcnSdF7OT6fl
+        q+nsfMhuHCmM4hK+TAAAvudv0mk13opLKIuHkxZjlDWKy10QgAjOpBMhY6TI0rIo9qByltFm6b8t
+        BFom3i7E67s3C/GxoTj8ulBLS//LZGmEQsAKQwR2wA3COApcgDq4zkPA6J2NtDIIlQs5MhdkiGql
+        lTW2aBlclVHGyFCRQRjUvVyIF8+eASzsY43yafCA1Oh2ShNlaOH5k9jnjxxEj4oqUtBKxkDSwIa4
+        IZvBlFjApiHVQCu3sEIIaFJjczpGJluDD06h7gLGbA65cdoZVxPG4zaOSX/bnz9SSbZyoR0VcNDK
+        jWSgmM1JsqjH6nfeHyxQBIwxyZBm15h+kOkmqa8Ab6Tp8j3HpSfKX4zJHwmGgD5guquvModOcRdQ
+        g3aqS63PxfKEqr947DC7kgGBt56UNGYLXUQNZA8GTppEIXV6QpGDTCb6Nt/yLyqfyjL84s2+BVd9
+        vSiCtJCBXkeLMuberq3bGNQ1FhDXZEwssgMMWbhVCNLqlO8qRgsaI9W2n5ShqqNpU4FyCw9kDjOx
+        XON244KOI8Fk62LUnOKgEMX+Ibx4fff2/bsPf11/vL57M371AasuyrR5bGfMcH6/WyPG1T64VRzw
+        3XmVatssA8robFoZkZ0XGb2fAHzN66o72EDCB9d6XrJbo02E8/nFWU8o9mtyBJfnA8qOpRkBZ+VJ
+        8RPKpUaWZOJo5wklVYN6THp6vjMhO01uj5WTkfenkn5G3/snW49YjtLvAaXQM+qlD6hJHdrehwVM
+        L/BY2K7WWbCI28jYLiuyNQYfqF/klV/+XqlZibMSV2JyP/kBAAD//wMAjDIcJNYGAAA=
+    headers:
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-RAY:
+      - 8f0e4b6a4c2544d3-ATL
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Thu, 12 Dec 2024 14:09:54 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=vEKNLjZnC.LP1Zx91Kyqo83dQGkplhLi4QMzk1C7Y74-1734012594-1.0.1.1-eHbmPXOpPpcXj62XfQtxqv4obm1pVg9AUusgQsM2MRT2YuH.diBla5A5gU36Z_aORLJxOV8MiF4WsgQuge8Bfw;
+        path=/; expires=Thu, 12-Dec-24 14:39:54 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=R4E4AhPFEz3LO41G7Nk0KMwqbqHuHqwl0qTV6KRfYD8-1734012594375-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-organization:
+      - help-kitchen
+      openai-processing-ms:
+      - '2547'
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      x-ratelimit-limit-requests:
+      - '10000'
+      x-ratelimit-limit-tokens:
+      - '10000000'
+      x-ratelimit-remaining-requests:
+      - '9999'
+      x-ratelimit-remaining-tokens:
+      - '9997284'
+      x-ratelimit-reset-requests:
+      - 6ms
+      x-ratelimit-reset-tokens:
+      - 16ms
+      x-request-id:
+      - req_8b82da2b9a33131a74007df3f2514038
+    status:
+      code: 200
+      message: OK
+- request:
+    body: "--c45eb87f7cb8b1e92f9fc7e4123e12b0\r\nContent-Disposition: form-data; name=\"file_type\"\r\n\r\ntext\r\n--c45eb87f7cb8b1e92f9fc7e4123e12b0\r\nContent-Disposition:
+      form-data; name=\"file\"; filename=\"test.txt\"\r\nContent-Type: text/plain\r\n\r\nThis
+      is a test file content.\r\n--c45eb87f7cb8b1e92f9fc7e4123e12b0--\r\n"
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '292'
+      content-type:
+      - multipart/form-data; boundary=c45eb87f7cb8b1e92f9fc7e4123e12b0
+      host:
+      - testserver
+      user-agent:
+      - testclient
+    method: POST
+    uri: http://testserver/documents/file
+  response:
+    body:
+      string: '{"status":"success","data":null,"message":"Successfully processed file:
+        test.txt"}'
+    headers:
+      content-length:
+      - '82'
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

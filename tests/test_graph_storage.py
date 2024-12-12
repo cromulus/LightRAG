@@ -1,9 +1,11 @@
 import pytest
 import os
 import shutil
+import tempfile
 from typing import Type
 from lightrag.base import BaseGraphStorage
 from lightrag.storage import NetworkXStorage
+from lightrag.kg.postgres_impl import PostgresGraphStorage
 from lightrag.utils import EmbeddingFunc
 
 class BaseGraphStorageTest:
@@ -38,6 +40,8 @@ class BaseGraphStorageTest:
 
         yield storage
         await storage.drop()
+        if hasattr(storage, 'pool'):
+            await storage.close()
 
     @pytest.mark.asyncio
     async def test_basic_node_operations(self, storage):
@@ -132,3 +136,24 @@ class TestNetworkXStorage(BaseGraphStorageTest):
         working_dir = self.config_factory()["working_dir"]
         if os.path.exists(working_dir):
             shutil.rmtree(working_dir)
+
+class TestPostgresGraphStorage(BaseGraphStorageTest):
+    """Test PostgreSQL graph storage implementation"""
+    storage_class = PostgresGraphStorage
+
+    @classmethod
+    def config_factory(cls):
+        from tests.setup_postgres_db import parse_postgres_uri
+        test_uri = os.getenv('POSTGRES_TEST_URI', 'postgresql://lightrag_test:lightrag_test@db:5432/lightrag_test')
+        return {
+            "postgres": parse_postgres_uri(test_uri)
+        }
+
+    @pytest.fixture(autouse=True)
+    async def ensure_db_setup(self, storage):
+        """Ensure test database is set up before tests"""
+        from tests.setup_postgres_db import setup_postgres
+        import asyncio
+        await setup_postgres()
+        await asyncio.sleep(1)
+        yield
