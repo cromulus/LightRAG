@@ -144,7 +144,7 @@ class TestPostgresGraphStorage(BaseGraphStorageTest):
     @classmethod
     def config_factory(cls):
         from tests.setup_postgres_db import parse_postgres_uri
-        test_uri = os.getenv('POSTGRES_TEST_URI', 'postgresql://lightrag_test:lightrag_test@db:5432/lightrag_test')
+        test_uri = os.getenv('POSTGRES_TEST_URI', 'postgresql://postgres:postgres@db:5432/lightrag_test')
         return {
             "postgres": parse_postgres_uri(test_uri)
         }
