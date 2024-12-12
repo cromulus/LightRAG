@@ -40,7 +40,7 @@ from .storage import (
     NetworkXStorage,
 )
 
-from .kg.postgres_impl import PostgresKVStorage
+from .kg.postgres_impl import PostgresKVStorage, PostgresVectorDBStorage, PostgresGraphStorage
 
 from .kg.neo4j_impl import Neo4JStorage
 
@@ -207,19 +207,22 @@ class LightRAG:
             )
         )
 
-    def _get_storage_class(self) -> Type[BaseGraphStorage]:
+    def _get_storage_class(self):
+        """Get storage class mapping."""
+        from .storage import (
+            JsonKVStorage,
+            NanoVectorDBStorage,
+            NetworkXStorage,
+        )
+        from .kg.postgres_impl import PostgresKVStorage, PostgresVectorDBStorage, PostgresGraphStorage
+
         return {
-            # kv storage
             "JsonKVStorage": JsonKVStorage,
-            "OracleKVStorage": OracleKVStorage,
-            # vector storage
             "NanoVectorDBStorage": NanoVectorDBStorage,
-            "OracleVectorDBStorage": OracleVectorDBStorage,
-            # graph storage
             "NetworkXStorage": NetworkXStorage,
-            "Neo4JStorage": Neo4JStorage,
-            "OracleGraphStorage": OracleGraphStorage,
-            # "ArangoDBStorage": ArangoDBStorage
+            "PostgresKVStorage": PostgresKVStorage,
+            "PostgresVectorDBStorage": PostgresVectorDBStorage,
+            "PostgresGraphStorage": PostgresGraphStorage
         }
 
     def insert(self, string_or_strings):
