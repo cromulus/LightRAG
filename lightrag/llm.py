@@ -26,7 +26,7 @@ from tenacity import (
 )
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Callable, Any
 from .base import BaseKVStorage
 from .utils import compute_args_hash, wrap_embedding_func_with_attrs
@@ -717,22 +717,6 @@ async def ollama_embedding(texts: list[str], embed_model, **kwargs) -> np.ndarra
 
 
 class Model(BaseModel):
-    """
-    This is a Pydantic model class named 'Model' that is used to define a custom language model.
-
-    Attributes:
-        gen_func (Callable[[Any], str]): A callable function that generates the response from the language model.
-            The function should take any argument and return a string.
-        kwargs (Dict[str, Any]): A dictionary that contains the arguments to pass to the callable function.
-            This could include parameters such as the model name, API key, etc.
-
-    Example usage:
-        Model(gen_func=openai_complete_if_cache, kwargs={"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY_1"]})
-
-    In this example, 'openai_complete_if_cache' is the callable function that generates the response from the OpenAI model.
-    The 'kwargs' dictionary contains the model name and API key to be passed to the function.
-    """
-
     gen_func: Callable[[Any], str] = Field(
         ...,
         description="A function that generates the response from the llm. The response must be a string",
@@ -742,8 +726,11 @@ class Model(BaseModel):
         description="The arguments to pass to the callable function. Eg. the api key, model name, etc",
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    # Modern way to configure model behavior
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,  # Allows Callable and other complex types
+        frozen=True,  # Makes the model immutable
+    )
 
 
 class MultiModel:

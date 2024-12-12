@@ -157,6 +157,15 @@ class NanoVectorDBStorage(BaseVectorStorage):
     async def index_done_callback(self):
         self._client.save()
 
+    async def drop(self):
+        """Drop all data from the vector storage"""
+        self._client = NanoVectorDB(
+            self.embedding_func.embedding_dim, storage_file=self._client_file_name
+        )
+        if os.path.exists(self._client_file_name):
+            os.remove(self._client_file_name)
+        self._client.save()
+
 
 @dataclass
 class NetworkXStorage(BaseGraphStorage):
@@ -299,3 +308,9 @@ class NetworkXStorage(BaseGraphStorage):
 
         nodes_ids = [self._graph.nodes[node_id]["id"] for node_id in nodes]
         return embeddings, nodes_ids
+
+    async def drop(self):
+        """Drop all nodes and edges from the graph"""
+        self._graph.clear()
+        if os.path.exists(self._graphml_xml_file):
+            os.remove(self._graphml_xml_file)

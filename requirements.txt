@@ -34,3 +34,5 @@ pytest-cov
 pytest-vcr
 pytest-asyncio
 vcrpy
+future
+pytest-xdist
