@@ -1,10 +1,11 @@
 import asyncpg
 import logging
+import numpy as np
 from dataclasses import dataclass
 from typing import List, Dict, Set, Optional, Union
 import json
 
-from ..base import BaseKVStorage
+from ..base import BaseKVStorage, BaseVectorStorage, BaseGraphStorage
 from ..utils import logger
 
 @dataclass
@@ -142,3 +143,195 @@ class PostgresKVStorage(BaseKVStorage):
         if self.pool:
             await self.pool.close()
             self.pool = None
+
+@dataclass
+class PostgresVectorDBStorage(BaseVectorStorage):
+    """PostgreSQL-based vector storage implementation using pgvector"""
+
+    pool: Optional[asyncpg.Pool] = None
+    _pool_lock = None
+
+    def __post_init__(self):
+        """Initialize connection pool and create table if needed"""
+        import asyncio
+        self._pool_lock = asyncio.Lock()
+        self._max_batch_size = self.global_config.get("embedding_batch_num", 32)
+
+    async def _get_pool(self) -> asyncpg.Pool:
+        """Get or create connection pool with retry logic"""
+        if self.pool is None:
+            async with self._pool_lock:
+                if self.pool is None:
+                    try:
+                        self.pool = await asyncpg.create_pool(**self.global_config["postgres"])
+                        await self._init_table()
+                    except Exception as e:
+                        logger.error(f"Failed to initialize PostgreSQL connection: {e}")
+                        raise
+        return self.pool
+
+    async def _init_table(self):
+        """Create the vector store table with pgvector extension"""
+        async with self.pool.acquire() as conn:
+            # Enable vector extension
+            await conn.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+
+            # Create vector store table
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS vector_store (
+                    namespace TEXT,
+                    id TEXT,
+                    content TEXT,
+                    embedding vector(384),
+                    metadata JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (namespace, id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_vector_store_namespace_id
+                ON vector_store(namespace, id);
+
+                CREATE INDEX IF NOT EXISTS idx_vector_store_embedding
+                ON vector_store USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 100);
+            ''')
+            logger.info(f"Initialized PostgreSQL vector store table for namespace '{self.namespace}'")
+
+    async def query(self, query: str, top_k: int) -> list[dict]:
+        """Query vectors by similarity"""
+        pool = await self._get_pool()
+
+        # Get query embedding
+        embeddings = await self.embedding_func([query])
+        # Convert numpy array to vector string format
+        query_vector = f"[{','.join(str(x) for x in embeddings[0].tolist())}]"
+
+        async with pool.acquire() as conn:
+            # Query similar vectors using cosine similarity
+            rows = await conn.fetch('''
+                SELECT id, content, metadata,
+                       1 - (embedding <=> $3::vector) as similarity
+                FROM vector_store
+                WHERE namespace = $1
+                ORDER BY embedding <=> $3::vector
+                LIMIT $2;
+            ''', self.namespace, top_k, query_vector)
+
+            results = []
+            for row in rows:
+                result = {
+                    'id': row['id'],
+                    'content': row['content'],
+                    'distance': 1 - row['similarity']  # Convert similarity to distance
+                }
+                if row['metadata']:
+                    result.update(row['metadata'])
+                results.append(result)
+
+            return results
+
+    async def upsert(self, data: dict[str, dict]):
+        """Insert or update vectors"""
+        if not data:
+            return
+
+        pool = await self._get_pool()
+
+        # Get embeddings for all content
+        contents = [item['content'] for item in data.values()]
+        embeddings = await self.embedding_func(contents)
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Prepare data for batch insert
+                rows = []
+                for i, (id, item) in enumerate(data.items()):
+                    metadata = {k: v for k, v in item.items() if k != 'content'}
+                    if self.meta_fields:
+                        metadata = {k: v for k, v in metadata.items() if k in self.meta_fields}
+
+                    # Convert numpy array to string format that pgvector expects
+                    vector_str = f"[{','.join(str(x) for x in embeddings[i].tolist())}]"
+
+                    rows.append((
+                        self.namespace,
+                        id,
+                        item['content'],
+                        vector_str,
+                        json.dumps(metadata) if metadata else None
+                    ))
+
+                # Batch upsert
+                await conn.executemany('''
+                    INSERT INTO vector_store (namespace, id, content, embedding, metadata)
+                    VALUES ($1, $2, $3, $4::vector, $5)
+                    ON CONFLICT (namespace, id) DO UPDATE SET
+                        content = EXCLUDED.content,
+                        embedding = EXCLUDED.embedding,
+                        metadata = EXCLUDED.metadata;
+                ''', rows)
+
+    async def drop(self):
+        """Delete all vectors for current namespace"""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute('''
+                DELETE FROM vector_store WHERE namespace = $1;
+            ''', self.namespace)
+
+    async def close(self):
+        """Close the connection pool"""
+        if self.pool:
+            await self.pool.close()
+            self.pool = None
+
+@dataclass
+class PostgresGraphStorage(BaseGraphStorage):
+    """PostgreSQL-based graph storage implementation"""
+
+    def __post_init__(self):
+        self._pool = None
+
+    async def has_node(self, node_id: str) -> bool:
+        # Implement node existence check
+        return False
+
+    async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
+        # Implement edge existence check
+        return False
+
+    async def node_degree(self, node_id: str) -> int:
+        # Implement node degree calculation
+        return 0
+
+    async def edge_degree(self, src_id: str, tgt_id: str) -> int:
+        # Implement edge degree calculation
+        return 0
+
+    async def get_node(self, node_id: str) -> Union[dict, None]:
+        # Implement node retrieval
+        return None
+
+    async def get_edge(self, source_node_id: str, target_node_id: str) -> Union[dict, None]:
+        # Implement edge retrieval
+        return None
+
+    async def get_node_edges(self, source_node_id: str) -> Union[list[tuple[str, str]], None]:
+        # Implement node edges retrieval
+        return None
+
+    async def upsert_node(self, node_id: str, node_data: dict[str, str]):
+        # Implement node insertion/update
+        pass
+
+    async def upsert_edge(self, source_node_id: str, target_node_id: str, edge_data: dict[str, str]):
+        # Implement edge insertion/update
+        pass
+
+    async def delete_node(self, node_id: str):
+        # Implement node deletion
+        pass
+
+    async def embed_nodes(self, algorithm: str) -> tuple[np.ndarray, list[str]]:
+        # Implement node embedding
+        raise NotImplementedError("Node embedding is not implemented for PostgreSQL storage.")

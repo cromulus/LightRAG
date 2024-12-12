@@ -1,6 +1,7 @@
 accelerate
 aioboto3
 aiohttp
+numpy
 
 # database packages
 asyncpg

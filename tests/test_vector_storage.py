@@ -1,14 +1,16 @@
 import pytest
 import os
 import shutil
+import numpy as np
 from typing import Type
 from lightrag.base import BaseVectorStorage
 from lightrag.storage import NanoVectorDBStorage
+from lightrag.kg.postgres_impl import PostgresVectorDBStorage
 from lightrag.utils import EmbeddingFunc
 
 async def mock_embedding_func(texts):
     """Mock embedding function that returns fixed-size vectors"""
-    return [[1.0] * 384] * len(texts)
+    return np.array([[1.0] * 384] * len(texts))
 
 class BaseVectorStorageTest:
     """Base test class for vector storage implementations"""
@@ -132,7 +134,7 @@ class TestNanoVectorDBStorage(BaseVectorStorageTest):
         os.makedirs(working_dir, exist_ok=True)
         return {
             "working_dir": working_dir,
-            "embedding_batch_num": 32  # Add default batch size for testing
+            "embedding_batch_num": 32
         }
 
     @pytest.fixture(autouse=True)
@@ -142,3 +144,32 @@ class TestNanoVectorDBStorage(BaseVectorStorageTest):
         working_dir = self.config_factory()["working_dir"]
         if os.path.exists(working_dir):
             shutil.rmtree(working_dir)
+
+class TestPostgresVectorDBStorage(BaseVectorStorageTest):
+    """Test PostgreSQL vector storage implementation"""
+    storage_class = PostgresVectorDBStorage
+
+    @classmethod
+    def config_factory(cls):
+        return {
+            "postgres": {
+                "host": "localhost",
+                "port": 5432,
+                "user": "lightrag_test",
+                "password": "lightrag_test",
+                "database": "lightrag_test"
+            },
+            "embedding_batch_num": 32
+        }
+
+    @pytest.fixture(autouse=True)
+    async def ensure_db_setup(self, storage):
+        """Ensure test database is set up before tests"""
+        from tests.setup_postgres_db import setup_postgres
+        import asyncio
+        await setup_postgres()
+        await asyncio.sleep(1)
+        yield
+        if storage and storage.pool:
+            await storage.pool.close()
+

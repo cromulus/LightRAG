@@ -79,7 +79,7 @@ def test_query():
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
-@vcr.use_cassette("tests/fixtures/vcr_cassettes/test_upload_file.yaml")
+@vcr.use_cassette("tests/fixtures/vcr_cassettes/test_upload_file_v2.yaml")
 def test_upload_file():
     # Create a test file
     test_content = "This is a test file content."
