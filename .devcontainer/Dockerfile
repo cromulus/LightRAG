@@ -16,6 +16,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         libssl-dev \
         flex \
         bison \
+        dnsutils \
+        iputils-ping \
         libpq-dev \
         rustc \
         cargo \
@@ -32,4 +34,4 @@ RUN pip3 --disable-pip-version-check --no-cache-dir install \
     pytest \
     pytest-asyncio \
     && rm -rf /root/.cache/pip
-RUN echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+RUN echo 'eval "$(direnv hook bash)"' >> /etc/bash.bashrc

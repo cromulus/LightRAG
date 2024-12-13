@@ -8,27 +8,35 @@ services:
     volumes:
       - ..:/workspace:cached
     command: sleep infinity
-    network_mode: service:db
+    networks:
+      - lightrag_net
     depends_on:
       - db
     environment:
       POSTGRES_URI: postgresql://postgres:postgres@db:5432/lightrag
       POSTGRES_TEST_URI: postgresql://postgres:postgres@db:5432/lightrag_test
       POSTGRES_DEV_URI: postgresql://postgres:postgres@db:5432/lightrag_development
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   db:
     build:
       context: .
       dockerfile: Dockerfile.postgres
     restart: unless-stopped
+    networks:
+      - lightrag_net
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: lightrag
-    ports:
-      - "5432:5432"
+
+networks:
+  lightrag_net:
+    driver: bridge
 
 volumes:
   postgres-data:
