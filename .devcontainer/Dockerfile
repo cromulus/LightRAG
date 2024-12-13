@@ -28,10 +28,13 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 # Create the workspace directory
 WORKDIR /workspace
 
-# Install basic Python dependencies
-RUN pip3 --disable-pip-version-check --no-cache-dir install \
-    asyncpg \
-    pytest \
-    pytest-asyncio \
-    && rm -rf /root/.cache/pip
+# Copy both requirements files
+COPY requirements.txt /tmp/requirements.txt
+COPY .devcontainer/requirements.txt /tmp/dev-requirements.txt
+
+# Install requirements
+RUN pip3 --disable-pip-version-check --no-cache-dir install -r /tmp/requirements.txt \
+    && pip3 --disable-pip-version-check --no-cache-dir install -r /tmp/dev-requirements.txt
+
+# Set up direnv
 RUN echo 'eval "$(direnv hook bash)"' >> /etc/bash.bashrc

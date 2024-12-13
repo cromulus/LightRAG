@@ -12,6 +12,5 @@
             ]
         }
     },
-    "postCreateCommand": "pip install -e .",
     "remoteUser": "vscode"
 }
