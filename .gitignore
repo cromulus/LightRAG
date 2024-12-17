@@ -14,3 +14,9 @@ ignore_this.txt
 .ruff_cache/
 gui/
 *.log
+.DS_Store
+.cursor
+.vscode
+.envrc
+.coverage
+.DS_Store

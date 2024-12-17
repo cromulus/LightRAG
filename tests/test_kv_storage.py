@@ -1,0 +1,174 @@
+import pytest
+import os
+import shutil
+from typing import Dict, Type
+from lightrag.base import BaseKVStorage, EmbeddingFunc
+from lightrag.storage import JsonKVStorage
+#from lightrag.kg.postgres_impl import PostgresKVStorage
+
+# Dictionary of storage implementations to test
+STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
+    "json": JsonKVStorage,
+#    "postgres": PostgresKVStorage,
+}
+
+
+# Configuration factories for each implementation
+async def json_config_factory():
+    working_dir = "test_kv_storage"
+    os.makedirs(working_dir, exist_ok=True)
+    return {"working_dir": working_dir}
+
+
+CONFIG_FACTORIES = {
+    "json": json_config_factory,
+    #"postgres": postgres_config_factory,
+}
+
+async def json_setup(store):
+    pass
+
+async def postgres_setup(store):
+    await store.drop()
+    await store.ensure_schema_exists()
+
+SETUP_HANDLERS = {
+    "json": json_setup,
+    #"postgres": postgres_setup,
+}
+
+
+# Cleanup handlers for each implementation
+async def json_cleanup(config):
+    working_dir = config["working_dir"]
+    if os.path.exists(working_dir):
+        shutil.rmtree(working_dir)
+
+async def postgres_cleanup(config):
+    # Clean up the test database tables
+    if 'postgres' in config:
+        store = PostgresKVStorage(
+            namespace="test",
+            global_config=config,
+            embedding_func=lambda texts: [[1.0] * 384] * len(texts)
+        )
+        await store.drop()
+        if store.close:
+            await store.close()
+
+CLEANUP_HANDLERS = {
+    "json": json_cleanup,
+    "postgres": postgres_cleanup,
+}
+
+@pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
+async def storage(request):
+    """Fixture that yields each storage implementation"""
+    impl_name = request.param
+    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
+    config = CONFIG_FACTORIES[impl_name]()
+
+    # Create a dummy embedding function
+    embedding_func = EmbeddingFunc(
+        embedding_dim=384,
+        max_token_size=5000,
+        func=lambda texts: [[1.0] * 384] * len(texts)
+    )
+
+    store = storage_class(
+        namespace="test",
+        global_config=config,
+        embedding_func=embedding_func  # Pass embedding_func as required
+    )
+
+    if hasattr(store, 'init_tables'):
+        await store.init_tables()
+
+    yield store
+
+    await store.drop()
+    if hasattr(store, 'close'):
+        await store.close()
+    await CLEANUP_HANDLERS[impl_name](config)
+
+@pytest.mark.asyncio
+async def test_basic_operations(storage):
+    test_data = {
+        "key1": {"field1": "value1"},
+        "key2": {"field2": "value2"}
+    }
+    await storage.upsert(test_data)
+
+    value1 = await storage.get_by_id("key1")
+    assert value1 == {"field1": "value1"}
+
+    values = await storage.get_by_ids(["key1", "key2"])
+    assert values == [{"field1": "value1"}, {"field2": "value2"}]
+
+    missing = await storage.filter_keys(["key1", "key3"])
+    assert missing == {"key3"}
+
+    keys = await storage.all_keys()
+    assert set(keys) == {"key1", "key2"}
+
+@pytest.mark.asyncio
+async def test_field_filtering(storage):
+    test_data = {
+        "key1": {"field1": "value1", "field2": "value2"}
+    }
+    await storage.upsert(test_data)
+
+    filtered = await storage.get_by_ids(["key1"], fields={"field1"})
+    assert filtered == [{"field1": "value1"}]
+
+@pytest.mark.asyncio
+async def test_drop(storage):
+    test_data = {"key1": {"field1": "value1"}}
+    await storage.upsert(test_data)
+    await storage.drop()
+
+    keys = await storage.all_keys()
+    assert len(keys) == 0
+
+@pytest.mark.asyncio
+async def test_index_done_callback(storage):
+    test_data = {
+        "key1": {"field1": "value1"}
+    }
+    await storage.upsert(test_data)
+    await storage.index_done_callback()
+
+    # Verify storage is still accessible after callback
+    value = await storage.get_by_id("key1")
+    assert value == {"field1": "value1"}
+
+@pytest.mark.asyncio
+async def test_batch_operations(storage):
+    try:
+        if not hasattr(storage, 'batch_get'):
+            pytest.skip(f"{storage.__class__.__name__} doesn't support batch operations")
+
+        data = {
+            f"key{i}": {"value": f"value{i}"}
+            for i in range(5)
+        }
+        await storage.upsert(data)
+        results = await storage.batch_get(list(data.keys()))
+        assert len(results) == len(data)
+    except AttributeError:
+        pytest.skip(f"{storage.__class__.__name__} doesn't support batch operations")
+
+@pytest.mark.asyncio
+async def test_ttl(storage):
+    # Test TTL if supported
+    try:
+        if hasattr(storage, 'upsert_with_ttl'):
+            await storage.upsert_with_ttl({"key1": {"value": "temp"}}, ttl_seconds=1)
+            value = await storage.get_by_id("key1")
+            assert value is not None
+            await asyncio.sleep(1.1)
+            value = await storage.get_by_id("key1")
+            assert value is None
+    except AttributeError:
+        pytest.skip(f"{storage.__class__.__name__} doesn't support TTL")
+
