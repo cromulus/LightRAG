@@ -41,6 +41,12 @@ class AGEQueryException(Exception):
 
 @dataclass
 class AGEStorage(BaseGraphStorage):
+    # DDL statements to manage the graph
+    DDL_STATEMENTS = {
+        "create_graph": "SELECT create_graph('{graph_name}')",
+        "drop_graph": "SELECT drop_graph('{graph_name}', true)",
+    }
+
     @staticmethod
     def load_nx_graph(file_name):
         print("no preloading of graph with AGE in production")
@@ -51,20 +57,20 @@ class AGEStorage(BaseGraphStorage):
             global_config=global_config,
             embedding_func=embedding_func,
         )
-        self._driver = None
-        self._driver_lock = asyncio.Lock()
-        DB = os.environ["AGE_POSTGRES_DB"].replace("\\", "\\\\").replace("'", "\\'")
-        USER = os.environ["AGE_POSTGRES_USER"].replace("\\", "\\\\").replace("'", "\\'")
-        PASSWORD = (
-            os.environ["AGE_POSTGRES_PASSWORD"]
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
+ # Parse AGE configuration from global_config
+        age_config = self.global_config.get("age", {})
+        connection_string = (
+            f"dbname='{age_config.get('database')}' "
+            f"user='{age_config.get('user')}' "
+            f"password='{age_config.get('password')}' "
+            f"host='{age_config.get('host')}' "
+            f"port={age_config.get('port')}"
         )
-        HOST = os.environ["AGE_POSTGRES_HOST"].replace("\\", "\\\\").replace("'", "\\'")
-        PORT = int(os.environ["AGE_POSTGRES_PORT"])
-        self.graph_name = os.environ["AGE_GRAPH_NAME"]
 
-        connection_string = f"dbname='{DB}' user='{USER}' password='{PASSWORD}' host='{HOST}' port={PORT}"
+        logger.info(f"Initializing connection pool with connection string: {connection_string}")
+
+        self.graph_name = age_config.get("graph_name", "test_graph")
+        self.search_path = age_config.get("search_path", "ag_catalog, public")
 
         self._driver = AsyncConnectionPool(connection_string, open=False)
 
@@ -605,3 +611,35 @@ class AGEStorage(BaseGraphStorage):
                 yield connection
         finally:
             await self._driver.putconn(connection)
+
+
+    async def check_tables(self):
+        """Ensure that the AGE graph exists, create it if it doesn't."""
+        graph_name = self.graph_name
+        check_graph_query = f"SELECT * FROM ag_catalog.ag_graph WHERE name = '{graph_name}';"
+
+        async with self._get_pool_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(check_graph_query)
+                graph_exists = await cur.fetchone()
+                if not graph_exists:
+                    create_graph_query = self.DDL_STATEMENTS["create_graph"].format(graph_name=graph_name)
+                    await cur.execute(create_graph_query)
+                    await conn.commit()
+                    logger.info(f"Graph '{graph_name}' created.")
+                else:
+                    logger.info(f"Graph '{graph_name}' already exists.")
+
+    async def drop(self):
+        """Drop the AGE graph if it exists."""
+        graph_name = self.graph_name
+        drop_graph_query = self.DDL_STATEMENTS["drop_graph"].format(graph_name=graph_name)
+
+        async with self._get_pool_connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(drop_graph_query)
+                    await conn.commit()
+                    logger.info(f"Graph '{graph_name}' dropped.")
+                except Exception as e:
+                    logger.error(f"Error dropping graph '{graph_name}': {e}")

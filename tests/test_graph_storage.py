@@ -47,7 +47,7 @@ CONFIG_FACTORIES = {
 
 async def age_setup(store):
     await store.drop()
-    await store.ensure_graph_exists()
+    await store.check_tables()
 
 
 async def networkx_setup(store):
@@ -75,10 +75,16 @@ CLEANUP_HANDLERS = {
 }
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
-async def storage(request):
-    impl_name = request.param
+def impl_name(request):
+    return request.param
+
+@pytest.fixture
+async def storage(impl_name):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = CONFIG_FACTORIES[impl_name]()
+
+    async def mock_embedding_func(texts):
+        return [[1.0] * 384] * len(texts)
 
     store = storage_class(
         namespace="test",
@@ -86,7 +92,7 @@ async def storage(request):
         embedding_func=EmbeddingFunc(
             embedding_dim=384,
             max_token_size=5000,
-            func=lambda texts: [[1.0] * 384] * len(texts)
+            func=mock_embedding_func
         ),
     )
 
@@ -95,11 +101,9 @@ async def storage(request):
 
     yield store
 
-    # Run cleanup handler first if it exists
     if impl_name in CLEANUP_HANDLERS:
         await CLEANUP_HANDLERS[impl_name](store)
 
-    # Then close the store
     if hasattr(store, 'close'):
         await store.close()
 

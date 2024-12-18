@@ -1,6 +1,7 @@
 import pytest
 import os
 import shutil
+import tests.test_utils as test_utils
 from typing import Dict, Type
 from lightrag.base import BaseKVStorage, EmbeddingFunc
 from lightrag.storage import JsonKVStorage
@@ -20,41 +21,37 @@ async def json_config_factory():
     return {"working_dir": working_dir}
 
 
+async def postgres_config_factory():
+    uri = os.getenv("POSTGRES_TEST_URI")
+    return test_utils.parse_postgres_uri(uri)
+
 CONFIG_FACTORIES = {
     "json": json_config_factory,
-    #"postgres": postgres_config_factory,
+    "postgres": postgres_config_factory,
 }
 
 async def json_setup(store):
     pass
 
 async def postgres_setup(store):
-    await store.drop()
-    await store.ensure_schema_exists()
+    await store.drop() # drop all old tables
+    await store.check_tables() # create new tables
 
 SETUP_HANDLERS = {
     "json": json_setup,
-    #"postgres": postgres_setup,
+    "postgres": postgres_setup,
 }
 
 
 # Cleanup handlers for each implementation
-async def json_cleanup(config):
-    working_dir = config["working_dir"]
+async def json_cleanup(store):
+    working_dir = store.global_config["working_dir"]
     if os.path.exists(working_dir):
         shutil.rmtree(working_dir)
 
-async def postgres_cleanup(config):
-    # Clean up the test database tables
-    if 'postgres' in config:
-        store = PostgresKVStorage(
-            namespace="test",
-            global_config=config,
-            embedding_func=lambda texts: [[1.0] * 384] * len(texts)
-        )
-        await store.drop()
-        if store.close:
-            await store.close()
+async def postgres_cleanup(store):
+    await store.drop()
+    await store.close()
 
 CLEANUP_HANDLERS = {
     "json": json_cleanup,
@@ -62,13 +59,18 @@ CLEANUP_HANDLERS = {
 }
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
-async def storage(request):
-    """Fixture that yields each storage implementation"""
-    impl_name = request.param
-    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
-    config = CONFIG_FACTORIES[impl_name]()
+def impl_name(request):
+    return request.param
 
-    # Create a dummy embedding function
+@pytest.fixture(params=["full_docs", "text_chunks"])
+def namespace(request):
+    return request.param
+
+@pytest.fixture
+async def storage(impl_name, namespace):
+    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
+    config = await CONFIG_FACTORIES[impl_name]()
+
     embedding_func = EmbeddingFunc(
         embedding_dim=384,
         max_token_size=5000,
@@ -76,20 +78,65 @@ async def storage(request):
     )
 
     store = storage_class(
-        namespace="test",
+        namespace=namespace,
         global_config=config,
-        embedding_func=embedding_func  # Pass embedding_func as required
+        embedding_func=embedding_func
     )
 
-    if hasattr(store, 'init_tables'):
-        await store.init_tables()
+    setup_handler = SETUP_HANDLERS[impl_name]
+    await setup_handler(store)
 
     yield store
 
-    await store.drop()
-    if hasattr(store, 'close'):
-        await store.close()
-    await CLEANUP_HANDLERS[impl_name](config)
+    cleanup_handler = CLEANUP_HANDLERS[impl_name]
+    await cleanup_handler(store)
+
+@pytest.mark.asyncio
+async def test_full_docs_operations(storage):
+    if storage.namespace != "full_docs":
+        pytest.skip("Test only for full_docs namespace")
+
+    test_data = {
+        "doc1": {
+            "content": "Test document 1",
+            "workspace": "test_workspace"
+        },
+        "doc2": {
+            "content": "Test document 2",
+            "workspace": "test_workspace"
+        }
+    }
+    await storage.upsert(test_data)
+
+    doc = await storage.get_by_id("doc1")
+    assert doc["content"] == "Test document 1"
+
+@pytest.mark.asyncio
+async def test_text_chunks_operations(storage):
+    if storage.namespace != "text_chunks":
+        pytest.skip("Test only for text_chunks namespace")
+
+    test_chunks = {
+        "chunk1": {
+            "content": "Chunk 1 content",
+            "tokens": 10,
+            "chunk_order_index": 0,
+            "full_doc_id": "doc1",
+            "workspace": "test_workspace"
+        },
+        "chunk2": {
+            "content": "Chunk 2 content",
+            "tokens": 12,
+            "chunk_order_index": 1,
+            "full_doc_id": "doc1",
+            "workspace": "test_workspace"
+        }
+    }
+    await storage.upsert(test_chunks)
+
+    chunk = await storage.get_by_id("chunk1")
+    assert chunk["tokens"] == 10
+    assert chunk["chunk_order_index"] == 0
 
 @pytest.mark.asyncio
 async def test_basic_operations(storage):

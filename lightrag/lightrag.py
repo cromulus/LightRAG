@@ -80,7 +80,7 @@ ChromaVectorDBStorage = lazy_external_import(".kg.chroma_impl", "ChromaVectorDBS
 TiDBKVStorage = lazy_external_import(".kg.tidb_impl", "TiDBKVStorage")
 TiDBVectorDBStorage = lazy_external_import(".kg.tidb_impl", "TiDBVectorDBStorage")
 AGEStorage = lazy_external_import(".kg.age_impl", "AGEStorage")
-
+PostgresKVStorage = lazy_external_import(".kg.postgres_impl", "PostgresKVStorage")
 
 def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
     """

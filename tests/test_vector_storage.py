@@ -72,19 +72,24 @@ SETUP_HANDLERS = {
     "postgres": postgres_setup,
 }
 
-
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
-async def storage(request):
-    impl_name = request.param
-    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
-    config = CONFIG_FACTORIES[impl_name]()
+def impl_name(request):
+    return request.param
 
-    # Create an async embedding function
+@pytest.fixture(params=["chunks", "entities", "relationships"])
+def namespace(request):
+    return request.param
+
+@pytest.fixture
+async def storage(impl_name, namespace):
+    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
+    config = await CONFIG_FACTORIES[impl_name]()
+
     async def mock_embedding_func(texts):
         return [[1.0] * 384] * len(texts)
 
     store = storage_class(
-        namespace="test",
+        namespace=namespace,
         global_config=config,
         embedding_func=EmbeddingFunc(
             embedding_dim=384,
@@ -94,13 +99,49 @@ async def storage(request):
         meta_fields={"source", "type"}
     )
 
+    setup_handler = SETUP_HANDLERS[impl_name]
+    await setup_handler(store)
+
     yield store
 
-    if hasattr(store, 'drop'):
-        await store.drop()
-    if hasattr(store, 'close'):
-        await store.close()
-    await CLEANUP_HANDLERS[impl_name](config)
+    cleanup_handler = CLEANUP_HANDLERS[impl_name]
+    await cleanup_handler(config)
+
+@pytest.mark.asyncio
+async def test_chunks_operations(storage):
+    if storage.namespace != "chunks":
+        pytest.skip("Test only for chunks namespace")
+
+    chunks = {
+        "chunk1": {
+            "content": "Test chunk content",
+            "source": "test_doc",
+            "type": "chunk"
+        }
+    }
+    await storage.upsert(chunks)
+    results = await storage.query("test content", top_k=1)
+    assert len(results) == 1
+    assert results[0]["id"] == "chunk1"
+
+@pytest.mark.asyncio
+async def test_entities_operations(storage):
+    if storage.namespace != "entities":
+        pytest.skip("Test only for entities namespace")
+
+    entities = {
+        "ent1": {
+            "content": "Entity description",
+            "entity_name": "TestEntity",
+            "source": "test",
+            "type": "entity"
+        }
+    }
+    await storage.upsert(entities)
+    results = await storage.query("entity", top_k=1)
+    assert len(results) == 1
+    assert results[0]["id"] == "ent1"
+    assert "distance" in results[0]
 
 @pytest.mark.asyncio
 async def test_basic_operations(storage):
