@@ -1,3 +1,29 @@
+"""Test suite for key-value storage implementations in LightRAG.
+
+This module provides comprehensive testing for different key-value storage backends,
+including JSON-based and PostgreSQL implementations. It tests various operations
+such as basic CRUD, batch operations, TTL functionality, and embedding dimension
+handling across different namespaces (full_docs, text_chunks).
+
+The test suite uses parametrized fixtures to run the same tests against different
+storage implementations, namespaces, and embedding dimensions, ensuring consistent
+behavior across all storage backends.
+
+Key Features Tested:
+- Basic CRUD operations
+- Batch operations
+- TTL functionality
+- Field filtering
+- Embedding dimension validation
+- Namespace-specific operations
+
+Test Configuration:
+- Multiple storage implementations (JSON, PostgreSQL)
+- Different embedding dimensions (384, 1536)
+- Multiple namespaces (full_docs, text_chunks)
+- Mock embedding functions for consistent testing
+"""
+
 import pytest
 import os
 import shutil
@@ -19,16 +45,31 @@ TEST_EMBEDDING_DIMS = [384, 1536]
 
 @pytest.fixture(params=TEST_EMBEDDING_DIMS)
 async def embedding_dim(request):
+    """Parametrized fixture providing different embedding dimensions.
+
+    Returns:
+        int: Embedding dimension size (384 or 1536)
+    """
     return request.param
 
 # Configuration factories for each implementation
 async def json_config_factory():
+    """Create configuration for JSON storage implementation.
+
+    Returns:
+        dict: Configuration with working directory
+    """
     working_dir = "test_kv_storage"
     os.makedirs(working_dir, exist_ok=True)
     return {"working_dir": working_dir}
 
 
 async def postgres_config_factory():
+    """Create configuration for PostgreSQL storage implementation.
+
+    Returns:
+        dict: PostgreSQL connection configuration
+    """
     uri = os.getenv("POSTGRES_TEST_URI")
     return test_utils.parse_postgres_uri(uri)
 
@@ -40,14 +81,35 @@ CONFIG_FACTORIES = {
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
 def impl_name(request):
+    """Parametrized fixture providing storage implementation names.
+
+    Returns:
+        str: Name of the storage implementation ('json' or 'postgres')
+    """
     return request.param
 
 @pytest.fixture(params=["full_docs", "text_chunks"])
 def namespace(request):
+    """Parametrized fixture providing different storage namespaces.
+
+    Returns:
+        str: Namespace name for testing ('full_docs' or 'text_chunks')
+    """
     return request.param
 
 @pytest.fixture
 async def storage(request, impl_name, namespace, embedding_dim):
+    """Fixture providing configured storage instance for testing.
+
+    Args:
+        request: pytest request object
+        impl_name: Storage implementation name
+        namespace: Storage namespace
+        embedding_dim: Embedding dimension size
+
+    Yields:
+        BaseKVStorage: Configured storage instance with mock embedding function
+    """
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
     config["embedding_dim"] = embedding_dim
@@ -77,6 +139,13 @@ def pytest_collection_modifyitems(items):
 
 @pytest.mark.asyncio
 async def test_full_docs_operations(storage):
+    """Test operations specific to the full_docs namespace.
+
+    Tests:
+        - Document storage and retrieval
+        - Workspace metadata handling
+        - Document content integrity
+    """
     if storage.namespace != "full_docs":
         pytest.skip("Test only for full_docs namespace")
 
@@ -97,6 +166,14 @@ async def test_full_docs_operations(storage):
 
 @pytest.mark.asyncio
 async def test_text_chunks_operations(storage):
+    """Test operations specific to the text_chunks namespace.
+
+    Tests:
+        - Chunk storage and retrieval
+        - Chunk metadata (tokens, order index)
+        - Document relationship tracking
+        - Workspace association
+    """
     if storage.namespace != "text_chunks":
         pytest.skip("Test only for text_chunks namespace")
 
@@ -124,6 +201,14 @@ async def test_text_chunks_operations(storage):
 
 @pytest.mark.asyncio
 async def test_basic_operations(storage):
+    """Test fundamental key-value storage operations.
+
+    Tests:
+        - Single key-value pair operations
+        - Multiple key-value pair operations
+        - Key existence checking
+        - Key enumeration
+    """
     test_data = {
         "key1": {"field1": "value1"},
         "key2": {"field2": "value2"}
@@ -144,6 +229,13 @@ async def test_basic_operations(storage):
 
 @pytest.mark.asyncio
 async def test_field_filtering(storage):
+    """Test field-level filtering capabilities.
+
+    Tests:
+        - Selective field retrieval
+        - Field filtering accuracy
+        - Partial document retrieval
+    """
     test_data = {
         "key1": {"field1": "value1", "field2": "value2"}
     }
@@ -154,6 +246,13 @@ async def test_field_filtering(storage):
 
 @pytest.mark.asyncio
 async def test_drop(storage):
+    """Test storage cleanup operations.
+
+    Tests:
+        - Storage dropping functionality
+        - Post-drop state verification
+        - Error handling for dropped storage
+    """
     test_data = {"key1": {"field1": "value1"}}
     await storage.upsert(test_data)
     await storage.drop()
@@ -168,6 +267,13 @@ async def test_drop(storage):
 
 @pytest.mark.asyncio
 async def test_index_done_callback(storage):
+    """Test index completion callback functionality.
+
+    Tests:
+        - Callback execution
+        - Storage accessibility post-callback
+        - Data integrity after callback
+    """
     test_data = {
         "key1": {"field1": "value1"}
     }
@@ -180,6 +286,14 @@ async def test_index_done_callback(storage):
 
 @pytest.mark.asyncio
 async def test_batch_operations(storage):
+    """Test batch processing capabilities.
+
+    Tests:
+        - Batch upsert operations
+        - Batch retrieval operations
+        - Field filtering in batch operations
+        - Handling of non-existent keys
+    """
     try:
         if not hasattr(storage, 'batch_get') or not hasattr(storage, 'batch_upsert_nodes'):
             pytest.skip(f"{storage.__class__.__name__} doesn't support batch operations")
@@ -227,6 +341,13 @@ async def test_batch_operations(storage):
 
 @pytest.mark.asyncio
 async def test_ttl(storage):
+    """Test time-to-live functionality if supported.
+
+    Tests:
+        - TTL-based entry expiration
+        - Immediate data accessibility
+        - Post-expiration data removal
+    """
     # Test TTL if supported
     try:
         if hasattr(storage, 'upsert_with_ttl'):
@@ -241,6 +362,13 @@ async def test_ttl(storage):
 
 # Add new test for embedding dimension handling
 async def test_embedding_dimension_validation(impl_name, namespace):
+    """Test validation of embedding dimensions.
+
+    Tests:
+        - Invalid dimension handling
+        - Dimension configuration validation
+        - Error handling for invalid dimensions
+    """
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     base_config = await CONFIG_FACTORIES[impl_name]()
 

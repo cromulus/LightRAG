@@ -1,3 +1,24 @@
+"""End-to-end test suite for LightRAG functionality.
+
+This module provides comprehensive end-to-end testing for the LightRAG system,
+covering document insertion, querying with different modes, and result consistency.
+It uses VCR.py to record and replay LLM interactions, ensuring consistent test
+behavior across runs.
+
+Key Features Tested:
+- Basic RAG operations (insert, query)
+- Multiple document handling
+- Query mode variations (naive, local, global, hybrid)
+- Response consistency
+- LLM integration
+
+Test Configuration:
+- Uses temporary directories for isolation
+- VCR.py for LLM response recording
+- Multiple test scenarios
+- Comprehensive assertion checks
+"""
+
 import os
 import tempfile
 import pytest
@@ -9,9 +30,14 @@ from lightrag.llm import gpt_4o_mini_complete
 from lightrag.kg.age_impl import AGEStorage
 from lightrag.utils import logger
 
-# Create a fixture for test data
 @pytest.fixture
 def sample_text():
+    """Fixture providing a sample text with contrasting themes.
+
+    Returns:
+        str: A passage from 'A Tale of Two Cities' with clear contrasts
+            suitable for testing theme extraction and analysis.
+    """
     return """
     It was the best of times, it was the worst of times, it was the age of wisdom,
     it was the age of foolishness, it was the epoch of belief, it was the epoch of
@@ -20,19 +46,35 @@ def sample_text():
 
 @pytest.fixture
 def multiple_documents():
+    """Fixture providing multiple distinct documents for testing.
+
+    Returns:
+        list[str]: A collection of different text samples, each with unique
+            content suitable for testing document retrieval and relevance.
+    """
     return [
         "The quick brown fox jumps over the lazy dog.",
         "To be or not to be, that is the question.",
         "All that glitters is not gold.",
     ]
 
-# Use VCR to record OpenAI responses
 @vcr.use_cassette(
     'tests/fixtures/vcr_cassettes/test_lightrag_basic.yaml',
     filter_headers=['authorization'],
     record_mode='once'
 )
 def test_lightrag_basic_operations(sample_text):
+    """Test basic LightRAG operations with different query modes.
+
+    Tests:
+        - Document insertion
+        - Querying with all available modes
+        - Response quality and relevance
+        - Theme extraction capabilities
+
+    Args:
+        sample_text: Test document with contrasting themes
+    """
     # Create a temporary directory for the test
     with tempfile.TemporaryDirectory() as temp_dir:
         # Initialize LightRAG
@@ -63,7 +105,17 @@ def test_lightrag_basic_operations(sample_text):
     record_mode='once'
 )
 def test_multiple_document_handling(multiple_documents):
-    """Test handling multiple documents and retrieving relevant information."""
+    """Test LightRAG's ability to handle and query multiple documents.
+
+    Tests:
+        - Multiple document insertion
+        - Cross-document querying
+        - Relevant document retrieval
+        - Response accuracy for specific queries
+
+    Args:
+        multiple_documents: Collection of test documents
+    """
     with tempfile.TemporaryDirectory() as temp_dir:
         rag = LightRAG(
             working_dir=temp_dir,
@@ -88,7 +140,17 @@ def test_multiple_document_handling(multiple_documents):
     record_mode='once'
 )
 def test_query_consistency(sample_text):
-    """Test that repeated queries with same parameters return consistent results."""
+    """Test consistency of LightRAG query responses.
+
+    Tests:
+        - Response consistency across multiple queries
+        - Semantic similarity of responses
+        - Theme identification consistency
+        - Response quality maintenance
+
+    Args:
+        sample_text: Test document with consistent themes
+    """
     with tempfile.TemporaryDirectory() as temp_dir:
         rag = LightRAG(
             working_dir=temp_dir,

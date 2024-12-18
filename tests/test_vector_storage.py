@@ -1,3 +1,28 @@
+"""Test suite for vector storage implementations in LightRAG.
+
+This module provides comprehensive testing for different vector storage backends,
+including NanoVectorDB and PostgreSQL implementations. It tests various operations
+such as insertion, querying, metadata filtering, and concurrent operations across
+different namespaces (chunks, entities, relationships).
+
+The test suite uses parametrized fixtures to run the same tests against different
+storage implementations and namespaces, ensuring consistent behavior across all
+storage backends.
+
+Key Features Tested:
+- Basic CRUD operations
+- Batch operations
+- Metadata filtering
+- Concurrent operations
+- Edge cases (empty queries, nonexistent documents)
+- Storage-specific features (cosine threshold)
+
+Test Configuration:
+- Each test runs against all implemented storage backends
+- Tests run in different namespaces (chunks, entities, relationships)
+- Mock embedding function used for consistent testing
+"""
+
 import pytest
 import os
 import shutil
@@ -36,14 +61,34 @@ CONFIG_FACTORIES = {
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
 def impl_name(request):
+    """Parametrized fixture providing storage implementation names.
+
+    Returns:
+        str: Name of the storage implementation ('nano' or 'postgres')
+    """
     return request.param
 
 @pytest.fixture(params=["chunks", "entities", "relationships"])
 def namespace(request):
+    """Parametrized fixture providing different storage namespaces.
+
+    Returns:
+        str: Namespace name for testing ('chunks', 'entities', or 'relationships')
+    """
     return request.param
 
 @pytest.fixture
 async def storage(request, impl_name, namespace):
+    """Fixture providing configured storage instance for testing.
+
+    Args:
+        request: pytest request object
+        impl_name: Storage implementation name
+        namespace: Storage namespace
+
+    Yields:
+        BaseVectorStorage: Configured storage instance with mock embedding function
+    """
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
 
@@ -73,6 +118,13 @@ def pytest_collection_modifyitems(items):
 
 @pytest.mark.asyncio
 async def test_chunks_operations(storage):
+    """Test vector storage operations specific to the chunks namespace.
+
+    Tests:
+        - Chunk insertion
+        - Semantic search within chunks
+        - Metadata preservation
+    """
     if storage.namespace != "chunks":
         pytest.skip("Test only for chunks namespace")
 
@@ -90,6 +142,13 @@ async def test_chunks_operations(storage):
 
 @pytest.mark.asyncio
 async def test_entities_operations(storage):
+    """Test vector storage operations specific to the entities namespace.
+
+    Tests:
+        - Entity insertion with metadata
+        - Entity search functionality
+        - Distance score calculation
+    """
     if storage.namespace != "entities":
         pytest.skip("Test only for entities namespace")
 
@@ -109,6 +168,14 @@ async def test_entities_operations(storage):
 
 @pytest.mark.asyncio
 async def test_basic_operations(storage):
+    """Test fundamental vector storage operations.
+
+    Tests:
+        - Document insertion
+        - Basic semantic search
+        - Metadata retrieval
+        - Distance score calculation
+    """
     # Skip if required methods aren't implemented
     if not hasattr(storage, 'upsert') or not hasattr(storage, 'query'):
         pytest.skip(f"{storage.__class__.__name__} doesn't implement required methods")
@@ -131,6 +198,13 @@ async def test_basic_operations(storage):
 
 @pytest.mark.asyncio
 async def test_batch_operations(storage):
+    """Test batch processing capabilities of vector storage.
+
+    Tests:
+        - Multiple document insertion
+        - Batch query results
+        - Metadata consistency in batch operations
+    """
     docs = {
         "doc1": {"content": "First document", "source": "test", "type": "doc"},
         "doc2": {"content": "Second document", "source": "test", "type": "doc"},
@@ -145,6 +219,13 @@ async def test_batch_operations(storage):
 
 @pytest.mark.asyncio
 async def test_metadata_filtering(storage):
+    """Test metadata-based filtering in vector search.
+
+    Tests:
+        - Search with metadata filters
+        - Search without filters
+        - Filter accuracy
+    """
     docs = {
         "doc1": {"content": "Test A", "source": "src1", "type": "typeA"},
         "doc2": {"content": "Test B", "source": "src2", "type": "typeB"}
@@ -165,6 +246,13 @@ async def test_metadata_filtering(storage):
 
 @pytest.mark.asyncio
 async def test_drop_and_callback(storage):
+    """Test storage cleanup and callback functionality.
+
+    Tests:
+        - Storage drop operation
+        - Index completion callback
+        - Storage accessibility after operations
+    """
     doc = {
         "doc1": {
             "content": "Test document",
@@ -187,16 +275,34 @@ async def test_drop_and_callback(storage):
 
 @pytest.mark.asyncio
 async def test_empty_query(storage):
+    """Test behavior with empty search queries.
+
+    Tests:
+        - Empty string query handling
+        - Result set validation
+    """
     results = await storage.query("", top_k=1)
     assert len(results) == 0
 
 @pytest.mark.asyncio
 async def test_query_nonexistent(storage):
+    """Test behavior when querying for non-existent documents.
+
+    Tests:
+        - Non-existent document query handling
+        - Empty result set validation
+    """
     results = await storage.query("nonexistent document", top_k=1)
     assert len(results) == 0
 
 @pytest.mark.asyncio
 async def test_invalid_metadata_filter(storage):
+    """Test behavior with invalid metadata filters.
+
+    Tests:
+        - Invalid metadata field handling
+        - Error handling for unsupported filters
+    """
     docs = {
         "doc1": {"content": "Test", "source": "src1", "type": "typeA"}
     }
@@ -211,6 +317,13 @@ async def test_invalid_metadata_filter(storage):
 
 @pytest.mark.asyncio
 async def test_concurrent_operations(storage):
+    """Test concurrent operation handling in vector storage.
+
+    Tests:
+        - Concurrent batch insertions
+        - Parallel query execution
+        - Result consistency under load
+    """
     # Test concurrent batch operations
     docs = {
         f"doc{i}": {"content": f"Document {i}", "source": "test", "type": "doc"}
@@ -228,6 +341,13 @@ async def test_concurrent_operations(storage):
 
 @pytest.mark.asyncio
 async def test_cosine_threshold(storage):
+    """Test cosine similarity threshold filtering.
+
+    Tests:
+        - Threshold-based result filtering
+        - Distance score validation
+        - Relevance ordering
+    """
     # Test threshold filtering if supported
     docs = {
         "doc1": {"content": "Very relevant", "source": "test", "type": "doc"},
