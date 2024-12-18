@@ -6,6 +6,7 @@ from typing import Dict, Type
 from lightrag.base import BaseKVStorage, EmbeddingFunc
 from lightrag.storage import JsonKVStorage
 from lightrag.kg.postgres_impl import PostgresKVStorage
+from .test_utils import standard_cleanup
 
 # Dictionary of storage implementations to test
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
@@ -17,7 +18,7 @@ STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
 TEST_EMBEDDING_DIMS = [384, 1536]
 
 @pytest.fixture(params=TEST_EMBEDDING_DIMS)
-def embedding_dim(request):
+async def embedding_dim(request):
     return request.param
 
 # Configuration factories for each implementation
@@ -36,32 +37,6 @@ CONFIG_FACTORIES = {
     "postgres": postgres_config_factory,
 }
 
-async def json_setup(store):
-    pass
-
-async def postgres_setup(store):
-    await store.drop() # drop all old tables
-
-SETUP_HANDLERS = {
-    "json": json_setup,
-    "postgres": postgres_setup,
-}
-
-
-# Cleanup handlers for each implementation
-async def json_cleanup(store):
-    working_dir = store.global_config["working_dir"]
-    if os.path.exists(working_dir):
-        shutil.rmtree(working_dir)
-
-async def postgres_cleanup(store):
-    await store.drop()
-    await store.close()
-
-CLEANUP_HANDLERS = {
-    "json": json_cleanup,
-    "postgres": postgres_cleanup,
-}
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
 def impl_name(request):
@@ -75,32 +50,23 @@ def namespace(request):
 async def storage(request, impl_name, namespace, embedding_dim):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
-
-    # Add embedding dimension to config
     config["embedding_dim"] = embedding_dim
 
     async def mock_embedding_func(texts):
         return [[1.0] * embedding_dim] * len(texts)
 
-    embedding_func = EmbeddingFunc(
-        embedding_dim=embedding_dim,
-        max_token_size=5000,
-        func=mock_embedding_func
-    )
-
     store = storage_class(
         namespace=namespace,
         global_config=config,
-        embedding_func=embedding_func
+        embedding_func=EmbeddingFunc(
+            embedding_dim=embedding_dim,
+            max_token_size=5000,
+            func=mock_embedding_func
+        )
     )
 
-    setup_handler = SETUP_HANDLERS[impl_name]
-    await setup_handler(store)
-
     yield store
-
-    cleanup_handler = CLEANUP_HANDLERS[impl_name]
-    await cleanup_handler(store)
+    await standard_cleanup(store)
 
 def pytest_collection_modifyitems(items):
     for item in items:

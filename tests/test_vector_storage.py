@@ -8,7 +8,7 @@ from lightrag.storage import NanoVectorDBStorage
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.postgres_impl import PostgresVectorStorage
 
-from .test_utils import parse_postgres_uri
+from .test_utils import parse_postgres_uri, standard_cleanup
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseVectorStorage]] = {
     "nano": NanoVectorDBStorage,
     "postgres": PostgresVectorStorage,
@@ -33,32 +33,6 @@ CONFIG_FACTORIES = {
     "postgres": postgres_config_factory,
 }
 
-async def nano_cleanup(store):
-    working_dir = store.global_config["working_dir"]
-    if os.path.exists(working_dir):
-        shutil.rmtree(working_dir)
-
-async def postgres_cleanup(store):
-    # Clean up the test database tables
-    await store.drop()
-    await store.close()
-
-CLEANUP_HANDLERS = {
-    "nano": nano_cleanup,
-    "postgres": postgres_cleanup,
-}
-
-async def nano_setup(store):
-    pass
-
-async def postgres_setup(store):
-    await store.drop()
-
-
-SETUP_HANDLERS = {
-    "nano": nano_setup,
-    "postgres": postgres_setup,
-}
 
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
 def impl_name(request):
@@ -87,13 +61,8 @@ async def storage(request, impl_name, namespace):
         meta_fields={"source", "type"}
     )
 
-    setup_handler = SETUP_HANDLERS[impl_name]
-    await setup_handler(store)
-
     yield store
-
-    cleanup_handler = CLEANUP_HANDLERS[impl_name]
-    await cleanup_handler(store)
+    await standard_cleanup(store)
 
 def pytest_collection_modifyitems(items):
     for item in items:

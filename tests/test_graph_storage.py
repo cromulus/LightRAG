@@ -6,9 +6,7 @@ from lightrag.base import BaseGraphStorage
 from lightrag.storage import NetworkXStorage
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.age_impl import AGEStorage
-from tests.test_utils import parse_postgres_uri
-import psycopg
-from psycopg.errors import DuplicateSchema, InvalidParameterValue
+from tests.test_utils import parse_postgres_uri, standard_cleanup
 
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseGraphStorage]] = {
     "networkx": NetworkXStorage,
@@ -44,35 +42,6 @@ CONFIG_FACTORIES = {
     "age": age_config_factory,
 }
 
-
-async def age_setup(store):
-    await store.drop()
-
-
-async def networkx_setup(store):
-    pass
-
-SETUP_HANDLERS = {
-    "networkx": networkx_setup,
-    "age": age_setup,
-}
-
-async def age_cleanup(store):
-    try:
-        await store.drop()
-    finally:
-        await store.close()
-
-async def networkx_cleanup(store):
-    working_dir = store.global_config["working_dir"]
-    if os.path.exists(working_dir):
-        shutil.rmtree(working_dir)
-
-CLEANUP_HANDLERS = {
-    "networkx": networkx_cleanup,
-    "age": age_cleanup,
-}
-
 @pytest.fixture(params=STORAGE_IMPLEMENTATIONS.keys())
 def impl_name(request):
     return request.param
@@ -82,26 +51,18 @@ async def storage(impl_name):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = CONFIG_FACTORIES[impl_name]()
 
-    async def mock_embedding_func(texts):
-        return [[1.0] * 384] * len(texts)
-
     store = storage_class(
         namespace="test",
         global_config=config,
         embedding_func=EmbeddingFunc(
             embedding_dim=384,
             max_token_size=5000,
-            func=mock_embedding_func
-        ),
+            func=lambda texts: [[1.0] * 384] * len(texts)
+        )
     )
 
-    try:
-        if impl_name in SETUP_HANDLERS:
-            await SETUP_HANDLERS[impl_name](store)
-        yield store
-    finally:
-        if hasattr(store, 'close'):
-            await store.close()
+    yield store
+    await standard_cleanup(store)
 
 @pytest.mark.asyncio
 async def test_basic_node_operations(storage):
