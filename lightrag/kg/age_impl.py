@@ -43,8 +43,8 @@ class AGEQueryException(Exception):
 class AGEStorage(BaseGraphStorage):
     # DDL statements to manage the graph
     DDL_STATEMENTS = {
-        "create_graph": "SELECT create_graph('{graph_name}')",
-        "drop_graph": "SELECT drop_graph('{graph_name}', true)",
+        "create_graph": "SELECT ag_catalog.create_graph('{graph_name}')",
+        "drop_graph": "SELECT ag_catalog.drop_graph('{graph_name}', true)",
     }
 
     @staticmethod
@@ -57,8 +57,13 @@ class AGEStorage(BaseGraphStorage):
             global_config=global_config,
             embedding_func=embedding_func,
         )
- # Parse AGE configuration from global_config
+
+        # Parse AGE configuration from global_config
         age_config = self.global_config.get("age", {})
+        self.graph_name = age_config.get("graph_name", "test_graph")
+        self.search_path = age_config.get("search_path", "ag_catalog, public")
+
+        # Build connection string
         connection_string = (
             f"dbname='{age_config.get('database')}' "
             f"user='{age_config.get('user')}' "
@@ -67,14 +72,19 @@ class AGEStorage(BaseGraphStorage):
             f"port={age_config.get('port')}"
         )
 
-        logger.info(f"Initializing connection pool with connection string: {connection_string}")
+        # Create and open connection pool immediately
+        self._driver = AsyncConnectionPool(
+            connection_string,
+            min_size=1,
+            max_size=10,
+            timeout=30,
+            max_waiting=10
+        )
 
-        self.graph_name = age_config.get("graph_name", "test_graph")
-        self.search_path = age_config.get("search_path", "ag_catalog, public")
-
-        self._driver = AsyncConnectionPool(connection_string, open=False)
-
-        return None
+        # Initialize node embedding algorithms
+        self._node_embed_algorithms = {
+            "node2vec": self._node2vec_embed,
+        }
 
     def __post_init__(self):
         self._node_embed_algorithms = {
@@ -618,15 +628,40 @@ class AGEStorage(BaseGraphStorage):
         graph_name = self.graph_name
         check_graph_query = f"SELECT * FROM ag_catalog.ag_graph WHERE name = '{graph_name}';"
 
-        async with self._get_pool_connection() as conn:
+        async with self._driver.connection() as conn:
+            # First try to drop any existing schema/graph
+            try:
+                drop_graph_query = self.DDL_STATEMENTS["drop_graph"].format(graph_name=graph_name)
+                async with conn.cursor() as cur:
+                    await cur.execute(drop_graph_query)
+                    await conn.commit()
+            except Exception as e:
+                # Ignore errors during drop - the graph might not exist
+                await conn.rollback()
+                logger.debug(f"Error dropping graph '{graph_name}': {str(e)}")
+
+            # Now try to drop the schema if it exists
+            try:
+                async with conn.cursor() as cur:
+                    await cur.execute(f"DROP SCHEMA IF EXISTS {graph_name} CASCADE")
+                    await conn.commit()
+            except Exception as e:
+                await conn.rollback()
+                logger.debug(f"Error dropping schema '{graph_name}': {str(e)}")
+
+            # Finally create the new graph
             async with conn.cursor() as cur:
                 await cur.execute(check_graph_query)
                 graph_exists = await cur.fetchone()
                 if not graph_exists:
-                    create_graph_query = self.DDL_STATEMENTS["create_graph"].format(graph_name=graph_name)
-                    await cur.execute(create_graph_query)
-                    await conn.commit()
-                    logger.info(f"Graph '{graph_name}' created.")
+                    try:
+                        create_graph_query = self.DDL_STATEMENTS["create_graph"].format(graph_name=graph_name)
+                        await cur.execute(create_graph_query)
+                        await conn.commit()
+                        logger.info(f"Graph '{graph_name}' created.")
+                    except Exception as e:
+                        await conn.rollback()
+                        raise AGEQueryException(f"Failed to create graph '{graph_name}': {str(e)}")
                 else:
                     logger.info(f"Graph '{graph_name}' already exists.")
 
@@ -643,3 +678,24 @@ class AGEStorage(BaseGraphStorage):
                     logger.info(f"Graph '{graph_name}' dropped.")
                 except Exception as e:
                     logger.error(f"Error dropping graph '{graph_name}': {e}")
+
+    async def delete_node(self, node_id: str):
+        """Delete a node and all its relationships from the graph."""
+        entity_name_label = node_id.strip('"')
+
+        query = """
+                MATCH (n:`{label}`)
+                DETACH DELETE n
+                """
+        params = {"label": AGEStorage._encode_graph_label(entity_name_label)}
+
+        try:
+            await self._query(query, **params)
+            logger.debug(
+                "{%s}:query:{%s}:params:{%s}",
+                inspect.currentframe().f_code.co_name,
+                query.format(**params),
+                params,
+            )
+        except Exception as e:
+            raise AGEQueryException(f"Failed to delete node '{node_id}': {str(e)}")

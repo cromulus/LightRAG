@@ -12,7 +12,7 @@ from psycopg.errors import DuplicateSchema, InvalidParameterValue
 
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseGraphStorage]] = {
     "networkx": NetworkXStorage,
-    #"age": AGEStorage,
+    "age": AGEStorage,
 }
 
 def networkx_config_factory():
@@ -96,16 +96,13 @@ async def storage(impl_name):
         ),
     )
 
-    if impl_name in SETUP_HANDLERS:
-        await SETUP_HANDLERS[impl_name](store)
-
-    yield store
-
-    if impl_name in CLEANUP_HANDLERS:
-        await CLEANUP_HANDLERS[impl_name](store)
-
-    if hasattr(store, 'close'):
-        await store.close()
+    try:
+        if impl_name in SETUP_HANDLERS:
+            await SETUP_HANDLERS[impl_name](store)
+        yield store
+    finally:
+        if hasattr(store, 'close'):
+            await store.close()
 
 @pytest.mark.asyncio
 async def test_basic_node_operations(storage):
