@@ -81,7 +81,7 @@ def namespace(request):
     return request.param
 
 @pytest.fixture
-async def storage(impl_name, namespace):
+async def storage(request, impl_name, namespace):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
 
@@ -106,6 +106,13 @@ async def storage(impl_name, namespace):
 
     cleanup_handler = CLEANUP_HANDLERS[impl_name]
     await cleanup_handler(config)
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if "storage" in item.fixturenames:
+            impl = item.callspec.params.get("impl_name", "unknown")
+            ns = item.callspec.params.get("namespace", "unknown")
+            item._nodeid = f"{item.originalname}[{impl}-{ns}]"
 
 @pytest.mark.asyncio
 async def test_chunks_operations(storage):
@@ -277,25 +284,5 @@ async def test_cosine_threshold(storage):
             assert all(r.get('distance', 0) >= storage.cosine_better_than_threshold for r in results)
     except AttributeError:
         pytest.skip(f"{storage.__class__.__name__} doesn't support cosine threshold filtering")
-
-def pytest_generate_tests(metafunc):
-    # Add ids to show storage implementation and namespace in test names
-    if "storage" in metafunc.fixturenames:
-        test_ids = [
-            f"{impl}-{ns}"
-            for impl in STORAGE_IMPLEMENTATIONS.keys()
-            for ns in ["chunks", "entities", "relationships"]
-        ]
-        metafunc.parametrize(
-            "storage",
-            [
-                pytest.param(
-                    metafunc.getfixturevalue("storage"),
-                    id=test_id
-                )
-                for test_id in test_ids
-            ],
-            indirect=True
-        )
 
 
