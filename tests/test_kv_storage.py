@@ -71,10 +71,13 @@ async def storage(request, impl_name, namespace):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
 
+    async def mock_embedding_func(texts):
+        return [[1.0] * 1536] * len(texts)
+
     embedding_func = EmbeddingFunc(
-        embedding_dim=384,
+        embedding_dim=1536,
         max_token_size=5000,
-        func=lambda texts: [[1.0] * 384] * len(texts)
+        func=mock_embedding_func
     )
 
     store = storage_class(
@@ -204,16 +207,47 @@ async def test_index_done_callback(storage):
 @pytest.mark.asyncio
 async def test_batch_operations(storage):
     try:
-        if not hasattr(storage, 'batch_get'):
+        if not hasattr(storage, 'batch_get') or not hasattr(storage, 'batch_upsert_nodes'):
             pytest.skip(f"{storage.__class__.__name__} doesn't support batch operations")
 
-        data = {
-            f"key{i}": {"value": f"value{i}"}
+        # Test batch upsert
+        test_data = {
+            f"key{i}": {
+                "content": f"Test content {i}",
+                "workspace": "test_workspace",
+                "meta_field": f"value{i}"
+            }
             for i in range(5)
         }
-        await storage.upsert(data)
-        results = await storage.batch_get(list(data.keys()))
-        assert len(results) == len(data)
+
+        await storage.batch_upsert_nodes(test_data)
+
+        # Test batch get
+        results = await storage.batch_get(list(test_data.keys()))
+        assert len(results) == len(test_data)
+
+        # Verify content of results
+        for key, data in test_data.items():
+            assert key in results
+            assert results[key]["content"] == data["content"]
+            assert results[key]["meta_field"] == data["meta_field"]
+
+        # Test batch get with field filtering
+        filtered_results = await storage.batch_get(
+            list(test_data.keys()),
+            fields={"content"}
+        )
+        assert len(filtered_results) == len(test_data)
+        for key, data in filtered_results.items():
+            assert "content" in data
+            assert "meta_field" not in data
+
+        # Test batch get with non-existent keys
+        mixed_keys = list(test_data.keys()) + ["nonexistent1", "nonexistent2"]
+        mixed_results = await storage.batch_get(mixed_keys)
+        assert len(mixed_results) == len(mixed_keys)
+        assert all(mixed_results[k] is None for k in ["nonexistent1", "nonexistent2"])
+
     except AttributeError:
         pytest.skip(f"{storage.__class__.__name__} doesn't support batch operations")
 

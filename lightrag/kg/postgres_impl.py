@@ -118,6 +118,61 @@ CREATE TABLE IF NOT EXISTS {table_name} (
 );
 """
 
+BATCH_UPSERT_FULL_DOCS = """
+INSERT INTO {table_name} (id, content, workspace, meta)
+SELECT
+    d.id,
+    d.content,
+    d.workspace,
+    d.meta::jsonb
+FROM jsonb_to_recordset(%s) AS d(
+    id TEXT,
+    content TEXT,
+    workspace TEXT,
+    meta JSONB
+)
+ON CONFLICT (id) DO UPDATE SET
+    content = EXCLUDED.content,
+    workspace = EXCLUDED.workspace,
+    meta = EXCLUDED.meta,
+    updatetime = CURRENT_TIMESTAMP;
+"""
+
+BATCH_UPSERT_CHUNKS = """
+INSERT INTO {table_name} (
+    id, content, tokens, chunk_order_index,
+    full_doc_id, workspace, meta, content_vector
+)
+SELECT
+    d.id,
+    d.content,
+    d.tokens,
+    d.chunk_order_index,
+    d.full_doc_id,
+    d.workspace,
+    d.meta::jsonb,
+    d.content_vector::vector({embedding_dim})
+FROM jsonb_to_recordset(%s) AS d(
+    id TEXT,
+    content TEXT,
+    tokens INTEGER,
+    chunk_order_index INTEGER,
+    full_doc_id TEXT,
+    workspace TEXT,
+    meta JSONB,
+    content_vector TEXT
+)
+ON CONFLICT (id) DO UPDATE SET
+    content = EXCLUDED.content,
+    tokens = EXCLUDED.tokens,
+    chunk_order_index = EXCLUDED.chunk_order_index,
+    full_doc_id = EXCLUDED.full_doc_id,
+    workspace = EXCLUDED.workspace,
+    meta = EXCLUDED.meta,
+    content_vector = EXCLUDED.content_vector::vector({embedding_dim}),
+    updatetime = CURRENT_TIMESTAMP;
+"""
+
 ###############################################################################
 # Helper functions
 ###############################################################################
@@ -329,6 +384,143 @@ class PostgresKVStorage(BaseKVStorage):
 
                 existing_keys = {row[0] for row in await cur.fetchall()}
                 return set(data) - existing_keys
+
+    async def batch_upsert_nodes(self, nodes: Dict[str, Dict]):
+        """
+        Batch upsert nodes into storage.
+
+        Args:
+            nodes: Dictionary mapping node IDs to their data
+        """
+        if not nodes:
+            return
+
+        table_name = self.namespace_table_map.get(self.namespace)
+        if not table_name:
+            return
+
+        batch_data = []
+
+        # Process embeddings if needed for text chunks
+        if self.namespace == "text_chunks":
+            contents = [doc.get('content', '') for doc in nodes.values()]
+            batches = [
+                contents[i:i + self._max_batch_size]
+                for i in range(0, len(contents), self._max_batch_size)
+            ]
+
+            # Generate embeddings in parallel
+            embeddings_list = await asyncio.gather(
+                *[self.embedding_func(batch) for batch in batches]
+            )
+            embeddings = np.concatenate(embeddings_list)
+
+            # Prepare batch data with embeddings
+            for i, (node_id, node) in enumerate(nodes.items()):
+                batch_data.append({
+                    'id': node_id,
+                    'content': node.get('content', ''),
+                    'tokens': node.get('tokens'),
+                    'chunk_order_index': node.get('chunk_order_index'),
+                    'full_doc_id': node.get('full_doc_id'),
+                    'workspace': node.get('workspace', self.db.workspace),
+                    'meta': {k: v for k, v in node.items() if k not in [
+                        'content', 'workspace', 'tokens',
+                        'chunk_order_index', 'full_doc_id'
+                    ]},
+                    'content_vector': embeddings[i].tolist()
+                })
+
+            # Execute batch upsert
+            async with self.db.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        BATCH_UPSERT_CHUNKS.format(
+                            table_name=table_name,
+                            embedding_dim=self.embedding_dim
+                        ),
+                        [json.dumps(batch_data)]
+                    )
+                    await conn.commit()
+
+        else:  # full_docs
+            # Prepare batch data
+            for node_id, node in nodes.items():
+                batch_data.append({
+                    'id': node_id,
+                    'content': node.get('content', ''),
+                    'workspace': node.get('workspace', self.db.workspace),
+                    'meta': {k: v for k, v in node.items() if k not in ['content', 'workspace']}
+                })
+
+            # Execute batch upsert
+            async with self.db.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        BATCH_UPSERT_FULL_DOCS.format(table_name=table_name),
+                        [json.dumps(batch_data)]
+                    )
+                    await conn.commit()
+
+    async def batch_get(self, ids: List[str], fields: Set[str] = None) -> Dict[str, Dict]:
+        """
+        Batch get documents by their IDs.
+
+        Args:
+            ids: List of document IDs to retrieve
+            fields: Optional set of fields to include in results
+
+        Returns:
+            Dictionary mapping document IDs to their data, with None for missing IDs
+        """
+        if not ids:
+            return {}
+
+        table_name = self.namespace_table_map.get(self.namespace)
+        if not table_name:
+            return {id: None for id in ids}
+
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(f"""
+                SELECT * FROM {table_name}
+                WHERE id = ANY(%s)
+                """, (ids,))
+
+                rows = await cur.fetchall()
+
+                # Create result dictionary with None for missing keys
+                results = {id: None for id in ids}
+
+                # Update with found records
+                for row in rows:
+                    doc_id = row['id']
+
+                    # Start with meta fields
+                    result = row.get('meta', {}) or {}
+
+                    # Add standard fields
+                    if row.get('content'):
+                        result['content'] = row['content']
+                    if row.get('workspace'):
+                        result['workspace'] = row['workspace']
+
+                    # Add text_chunks specific fields
+                    if self.namespace == "text_chunks":
+                        if row.get('tokens') is not None:
+                            result['tokens'] = row['tokens']
+                        if row.get('chunk_order_index') is not None:
+                            result['chunk_order_index'] = row['chunk_order_index']
+                        if row.get('full_doc_id'):
+                            result['full_doc_id'] = row['full_doc_id']
+
+                    # Filter fields if specified
+                    if fields:
+                        result = {k: v for k, v in result.items() if k in fields}
+
+                    results[doc_id] = result
+
+                return results
 
     # Implement other methods as needed...
 
