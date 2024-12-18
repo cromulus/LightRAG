@@ -1,7 +1,7 @@
 import asyncio
 import numpy as np
 from dataclasses import dataclass
-from typing import Union, List, Dict, Any, Set
+from typing import Union, List, Dict, Any, Set, Optional
 import psycopg
 import psycopg_pool
 import logging
@@ -10,7 +10,7 @@ import json
 
 from ..base import (
     BaseKVStorage,
-    #BaseVectorStorage,
+    BaseVectorStorage,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +195,7 @@ class PostgresKVStorage(BaseKVStorage):
     """
 
     db: 'PostgresDB' = None  # Database connection
+
     embedding_dim: int = 1536  # Set your embedding dimension here
 
     # Default embedding dimension if not specified
@@ -535,5 +536,256 @@ class PostgresKVStorage(BaseKVStorage):
 
     # Implement other methods as needed...
 
+    async def close(self):
+        await self.db.close()
+
+###############################################################################
+# Vector Storage Implementation for Postgres
+###############################################################################
+
+@dataclass
+class PostgresVectorStorage(BaseVectorStorage):
+    cosine_better_than_threshold: float = 0.2
+
+    def __post_init__(self):
+        # Initialize database connection
+        self.db = PostgresDB(self.global_config)
+
+        # Set other configurations
+        self.cosine_better_than_threshold = self.global_config.get(
+            "cosine_better_than_threshold", self.cosine_better_than_threshold
+        )
+        self._max_batch_size = self.global_config.get("embedding_batch_num", 32)
+        self.embedding_dim = self.embedding_func.embedding_dim
+
+        # Map namespaces to table names
+        self.namespace_table_map = {
+            "chunks": "lightrag_chunks",
+            "entities": "lightrag_entities",
+            "relationships": "lightrag_relationships"
+        }
+
+    async def index_done_callback(self):
+        """Called after indexing operations."""
+        # For PostgreSQL, we don't need to do anything special after indexing
+        return True
+
+    async def check_tables(self):
+        """Ensure required tables and extensions exist."""
+        await self._check_vector_extension()
+        table_name = self.namespace_table_map.get(self.namespace)
+        if not table_name:
+            return
+
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {table_name} (
+                        id TEXT PRIMARY KEY,
+                        name TEXT,
+                        content TEXT,
+                        content_vector vector({self.embedding_dim}),
+                        metadata JSONB,
+                        workspace TEXT,
+                        createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updatetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await conn.commit()
+
+    async def _check_vector_extension(self):
+        """Check if the vector extension is installed."""
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT * FROM pg_extension WHERE extname = 'vector'")
+                    if not await cur.fetchone():
+                        raise RuntimeError(
+                            "PostgreSQL vector extension not installed. Please install it first: "
+                            "CREATE EXTENSION vector;"
+                        )
+                except Exception as e:
+                    logger.error(f"Error checking vector extension: {e}")
+                    raise
+
+    async def ensure_schema_exists(self):
+        """Ensure the required tables exist."""
+        table_name = f"lightrag_{self.namespace}"
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    # Create table based on namespace
+                    if self.namespace == "chunks":
+                        await cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                                id TEXT PRIMARY KEY,
+                                content TEXT,
+                                content_vector vector({self.embedding_dim}),
+                                metadata JSONB,
+                                workspace TEXT,
+                                createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """)
+                    else:  # entities or relationships
+                        await cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {table_name} (
+                                id TEXT PRIMARY KEY,
+                                name TEXT,
+                                content TEXT,
+                                content_vector vector({self.embedding_dim}),
+                                metadata JSONB,
+                                workspace TEXT,
+                                createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """)
+
+                    # Create vector index
+                    await cur.execute(f"""
+                        CREATE INDEX IF NOT EXISTS idx_{table_name}_vector
+                        ON {table_name}
+                        USING ivfflat (content_vector vector_cosine_ops)
+                        WITH (lists = 100)
+                    """)
+                except Exception as e:
+                    logger.error(f"Error creating schema: {e}")
+                    raise
+
+    async def drop(self):
+        """Drop the tables."""
+        table_name = f"lightrag_{self.namespace}"
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+                except Exception as e:
+                    logger.error(f"Error dropping table: {e}")
+                    raise
+
+    async def upsert(self, data: Dict[str, Dict[str, Any]]):
+        """Insert or update vectors."""
+        if not data:
+            return []
+
+        table_name = f"lightrag_{self.namespace}"
+
+        # Process in batches
+        contents = [v.get('content', '') for v in data.values()]
+        batches = [
+            contents[i:i + self._max_batch_size]
+            for i in range(0, len(contents), self._max_batch_size)
+        ]
+
+        # Generate embeddings in parallel
+        embeddings_list = await asyncio.gather(
+            *[self.embedding_func(batch) for batch in batches]
+        )
+        embeddings = np.concatenate(embeddings_list)
+
+        # Prepare batch data
+        batch_data = []
+        for i, (doc_id, doc) in enumerate(data.items()):
+            metadata = {k: v for k, v in doc.items() if k in self.meta_fields}
+            record = {
+                'id': doc_id,
+                'content': doc.get('content', ''),
+                'content_vector': embeddings[i].tolist(),
+                'metadata': metadata,
+                'workspace': doc.get('workspace', self.db.workspace)
+            }
+            if self.namespace in ['entities', 'relationships']:
+                record['name'] = doc.get('name', doc_id)
+            batch_data.append(record)
+
+        # Execute upsert
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                for record in batch_data:
+                    await cur.execute(
+                        f"""
+                        INSERT INTO {table_name}
+                        (id, content, content_vector, metadata, workspace {', name' if self.namespace in ['entities', 'relationships'] else ''})
+                        VALUES (%s, %s, %s::vector, %s::jsonb, %s {', %s' if self.namespace in ['entities', 'relationships'] else ''})
+                        ON CONFLICT (id) DO UPDATE SET
+                            content = EXCLUDED.content,
+                            content_vector = EXCLUDED.content_vector,
+                            metadata = EXCLUDED.metadata,
+                            workspace = EXCLUDED.workspace
+                            {', name = EXCLUDED.name' if self.namespace in ['entities', 'relationships'] else ''}
+                        """,
+                        (
+                            record['id'],
+                            record['content'],
+                            record['content_vector'],
+                            json.dumps(record['metadata']),
+                            record['workspace'],
+                            *([record['name']] if self.namespace in ['entities', 'relationships'] else [])
+                        )
+                    )
+                await conn.commit()
+
+        return list(data.keys())
+
+    async def query(self, query: str, top_k: int = 5, metadata: Optional[Dict] = None) -> List[Dict]:
+        """Query vectors by similarity."""
+        table_name = f"lightrag_{self.namespace}"
+
+        # Generate query embedding
+        embedding = await self.embedding_func([query])
+
+        # Convert embedding to list format if it's numpy array
+        query_vector = embedding[0].tolist() if hasattr(embedding[0], 'tolist') else embedding[0]
+
+        # Build query
+        base_query = f"""
+            SELECT id, content, metadata,
+                   1 - (content_vector <=> %s::vector) as similarity
+            FROM {table_name}
+            WHERE workspace = %s
+        """
+
+        # Add metadata filtering if specified
+        metadata_values = []
+        if metadata:
+            metadata_conditions = []
+            for key, value in metadata.items():
+                metadata_conditions.append(f"metadata->>'{key}' = %s")
+                metadata_values.append(value)  # Only append the value, key is part of the SQL
+            if metadata_conditions:
+                base_query += f" AND {' AND '.join(metadata_conditions)}"
+
+        # Add similarity threshold and limit
+        base_query += f"""
+            AND 1 - (content_vector <=> %s::vector) >= %s
+            ORDER BY similarity DESC
+            LIMIT %s
+        """
+
+        # Execute query
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    params = [
+                        query_vector,
+                        self.db.workspace,
+                        *metadata_values,
+                        query_vector,
+                        self.cosine_better_than_threshold,
+                        top_k
+                    ]
+                    await cur.execute(base_query, params)
+                    rows = await cur.fetchall()
+
+                    return [
+                        {
+                            "id": row[0],
+                            "content": row[1],
+                            **row[2],  # metadata
+                            "distance": row[3]  # similarity is already the correct distance
+                        }
+                        for row in rows
+                    ]
+                except Exception as e:
+                    logger.error(f"Error during vector search: {e}")
+                    return []
     async def close(self):
         await self.db.close()
