@@ -9,10 +9,16 @@ from lightrag.kg.postgres_impl import PostgresKVStorage
 
 # Dictionary of storage implementations to test
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
-    "json": JsonKVStorage,
+"json": JsonKVStorage,
    "postgres": PostgresKVStorage,
 }
 
+# Test different embedding dimensions
+TEST_EMBEDDING_DIMS = [384, 1536]
+
+@pytest.fixture(params=TEST_EMBEDDING_DIMS)
+def embedding_dim(request):
+    return request.param
 
 # Configuration factories for each implementation
 async def json_config_factory():
@@ -67,15 +73,18 @@ def namespace(request):
     return request.param
 
 @pytest.fixture
-async def storage(request, impl_name, namespace):
+async def storage(request, impl_name, namespace, embedding_dim):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
     config = await CONFIG_FACTORIES[impl_name]()
 
+    # Add embedding dimension to config
+    config["embedding_dim"] = embedding_dim
+
     async def mock_embedding_func(texts):
-        return [[1.0] * 1536] * len(texts)
+        return [[1.0] * embedding_dim] * len(texts)
 
     embedding_func = EmbeddingFunc(
-        embedding_dim=1536,
+        embedding_dim=embedding_dim,
         max_token_size=5000,
         func=mock_embedding_func
     )
@@ -264,4 +273,27 @@ async def test_ttl(storage):
             assert value is None
     except AttributeError:
         pytest.skip(f"{storage.__class__.__name__} doesn't support TTL")
+
+# Add new test for embedding dimension handling
+async def test_embedding_dimension_validation(impl_name, namespace):
+    storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
+    base_config = await CONFIG_FACTORIES[impl_name]()
+
+    # Test with invalid embedding dimensions
+    invalid_dims = [0, -1, "invalid", None]
+
+    for dim in invalid_dims:
+        # Merge base config with embedding dimension
+        config = {**base_config, "embedding_dim": dim}
+
+        with pytest.raises(ValueError, match="Invalid embedding dimension"):
+            store = storage_class(
+                namespace=namespace,
+                global_config=config,
+                embedding_func=EmbeddingFunc(
+                    embedding_dim=dim,
+                    max_token_size=5000,
+                    func=lambda texts: [[1.0] * 384] * len(texts)
+                )
+            )
 

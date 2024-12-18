@@ -24,7 +24,20 @@ from .base import (
 
 @dataclass
 class JsonKVStorage(BaseKVStorage):
+    # Default embedding dimension if not specified
+    DEFAULT_EMBEDDING_DIM: int = 1536
+
     def __post_init__(self):
+        # Validate embedding dimension first
+        self.embedding_dim = (
+            getattr(self.embedding_func, "embedding_dim", None) or
+            self.global_config.get("embedding_dim", self.DEFAULT_EMBEDDING_DIM)
+        )
+
+        if not isinstance(self.embedding_dim, int) or self.embedding_dim <= 0:
+            raise ValueError(f"Invalid embedding dimension: {self.embedding_dim}")
+
+        # Then proceed with existing initialization
         working_dir = self.global_config["working_dir"]
         self._file_name = os.path.join(working_dir, f"kv_store_{self.namespace}.json")
         self._data = load_json(self._file_name) or {}

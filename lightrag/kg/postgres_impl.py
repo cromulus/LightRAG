@@ -197,10 +197,21 @@ class PostgresKVStorage(BaseKVStorage):
     db: 'PostgresDB' = None  # Database connection
     embedding_dim: int = 1536  # Set your embedding dimension here
 
+    # Default embedding dimension if not specified
+    DEFAULT_EMBEDDING_DIM: int = 1536
+
     def __post_init__(self):
-        self._data = {}
+        # Validate embedding dimension first
+        self.embedding_dim = (
+            getattr(self.embedding_func, "embedding_dim", None) or
+            self.global_config.get("embedding_dim", self.DEFAULT_EMBEDDING_DIM)
+        )
+
+        if not isinstance(self.embedding_dim, int) or self.embedding_dim <= 0:
+            raise ValueError(f"Invalid embedding dimension: {self.embedding_dim}")
+
+        # Then proceed with other initialization
         self._max_batch_size = self.global_config.get("embedding_batch_num", 32)
-        self.embedding_dim = self.global_config.get("embedding_dim", self.embedding_dim)
         self.db = PostgresDB(self.global_config)
         self.namespace_table_map = {
             "test": "lightrag_test",
