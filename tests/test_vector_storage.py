@@ -53,7 +53,7 @@ async def nano_setup(store):
 
 async def postgres_setup(store):
     await store.drop()
-    await store.ensure_schema_exists()
+
 
 SETUP_HANDLERS = {
     "nano": nano_setup,

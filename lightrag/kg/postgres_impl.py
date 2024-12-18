@@ -7,6 +7,7 @@ import psycopg_pool
 import logging
 from psycopg.rows import dict_row
 import json
+from functools import wraps
 
 from ..base import (
     BaseKVStorage,
@@ -181,6 +182,35 @@ def format_ids_for_in_clause(ids: List[str]) -> str:
     # Safely format an IN clause
     return ", ".join(["%s"] * len(ids))  # We'll pass ids as parameters separately
 
+def ensure_table_exists():
+    """
+    Decorator that ensures required tables exist before executing a query.
+    If a query fails due to missing table, creates the table and retries once.
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            try:
+                # Try original query first
+                return await func(self, *args, **kwargs)
+            except Exception as e:
+                # Check if error indicates missing table
+                error_msg = str(e).lower()
+                if "does not exist" in error_msg or "undefined_table" in error_msg:
+                    logger.info(f"Table missing, attempting to create: {error_msg}")
+                    try:
+                        # Create table and retry query
+                        await self.check_tables()
+                        return await func(self, *args, **kwargs)
+                    except Exception as retry_error:
+                        logger.error(f"Failed to create table and retry query: {retry_error}")
+                        raise
+                else:
+                    # If error is not about missing table, re-raise
+                    raise
+        return wrapper
+    return decorator
+
 ###############################################################################
 # KV Storage Implementation for Postgres
 ###############################################################################
@@ -215,7 +245,6 @@ class PostgresKVStorage(BaseKVStorage):
         self._max_batch_size = self.global_config.get("embedding_batch_num", 32)
         self.db = PostgresDB(self.global_config)
         self.namespace_table_map = {
-            "test": "lightrag_test",
             "full_docs": "lightrag_doc_full",
             "text_chunks": "lightrag_doc_chunks",
         }
@@ -228,7 +257,7 @@ class PostgresKVStorage(BaseKVStorage):
 
         async with self.db.pool.connection() as conn:
             async with conn.cursor() as cur:
-                if self.namespace == "full_docs" or self.namespace == "test":
+                if self.namespace == "full_docs":
                     await cur.execute(FULL_DOCS_TABLE_DDL.format(table_name=table_name))
                 elif self.namespace == "text_chunks":
                     await cur.execute(TEXT_CHUNKS_TABLE_DDL.format(
@@ -237,19 +266,7 @@ class PostgresKVStorage(BaseKVStorage):
                     ))
                 await conn.commit()
 
-    async def drop(self):
-        """Drop all tables."""
-        table_name = self.namespace_table_map.get(self.namespace)
-        if not table_name:
-            return
-
-        async with self.db.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(f"""
-                DROP TABLE IF EXISTS {table_name}
-                """)
-                await conn.commit()
-
+    @ensure_table_exists()
     async def get_by_id(self, id: str) -> Union[dict, None]:
         """Get a document by its ID."""
         table_name = self.namespace_table_map.get(self.namespace)
@@ -281,6 +298,7 @@ class PostgresKVStorage(BaseKVStorage):
                     result['full_doc_id'] = row['full_doc_id']
                 return result
 
+    @ensure_table_exists()
     async def upsert(self, docs: Dict[str, Dict]):
         """Insert or update documents."""
         table_name = self.namespace_table_map.get(self.namespace)
@@ -333,6 +351,7 @@ class PostgresKVStorage(BaseKVStorage):
                         """, (doc_id, content, workspace, json.dumps(meta)))
                 await conn.commit()
 
+    @ensure_table_exists()
     async def get_by_ids(self, ids: list[str], fields: Union[set[str], None] = None) -> list[Union[dict, None]]:
         """Get multiple documents by their IDs."""
         table_name = self.namespace_table_map.get(self.namespace)
@@ -367,6 +386,7 @@ class PostgresKVStorage(BaseKVStorage):
                     results.append(result)
                 return results
 
+    @ensure_table_exists()
     async def all_keys(self) -> list[str]:
         """Get all document IDs."""
         table_name = self.namespace_table_map.get(self.namespace)
@@ -381,6 +401,7 @@ class PostgresKVStorage(BaseKVStorage):
                 rows = await cur.fetchall()
                 return [row[0] for row in rows]
 
+    @ensure_table_exists()
     async def filter_keys(self, data: list[str]) -> set[str]:
         """Return keys that don't exist in the database."""
         table_name = self.namespace_table_map.get(self.namespace)
@@ -397,6 +418,7 @@ class PostgresKVStorage(BaseKVStorage):
                 existing_keys = {row[0] for row in await cur.fetchall()}
                 return set(data) - existing_keys
 
+    @ensure_table_exists()
     async def batch_upsert_nodes(self, nodes: Dict[str, Dict]):
         """
         Batch upsert nodes into storage.
@@ -474,6 +496,7 @@ class PostgresKVStorage(BaseKVStorage):
                     )
                     await conn.commit()
 
+    @ensure_table_exists()
     async def batch_get(self, ids: List[str], fields: Set[str] = None) -> Dict[str, Dict]:
         """
         Batch get documents by their IDs.
@@ -539,6 +562,23 @@ class PostgresKVStorage(BaseKVStorage):
     async def close(self):
         await self.db.close()
 
+    async def drop(self):
+        """Drop the table for this namespace."""
+        table_name = self.namespace_table_map.get(self.namespace)
+        if not table_name:
+            return
+
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+                    await conn.commit()
+                    logger.info(f"Dropped table {table_name}")
+                except Exception as e:
+                    logger.error(f"Error dropping table {table_name}: {e}")
+                    await conn.rollback()
+                    raise
+
 ###############################################################################
 # Vector Storage Implementation for Postgres
 ###############################################################################
@@ -570,97 +610,7 @@ class PostgresVectorStorage(BaseVectorStorage):
         # For PostgreSQL, we don't need to do anything special after indexing
         return True
 
-    async def check_tables(self):
-        """Ensure required tables and extensions exist."""
-        await self._check_vector_extension()
-        table_name = self.namespace_table_map.get(self.namespace)
-        if not table_name:
-            return
-
-        async with self.db.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(f"""
-                    CREATE TABLE IF NOT EXISTS {table_name} (
-                        id TEXT PRIMARY KEY,
-                        name TEXT,
-                        content TEXT,
-                        content_vector vector({self.embedding_dim}),
-                        metadata JSONB,
-                        workspace TEXT,
-                        createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updatetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                await conn.commit()
-
-    async def _check_vector_extension(self):
-        """Check if the vector extension is installed."""
-        async with self.db.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute("SELECT * FROM pg_extension WHERE extname = 'vector'")
-                    if not await cur.fetchone():
-                        raise RuntimeError(
-                            "PostgreSQL vector extension not installed. Please install it first: "
-                            "CREATE EXTENSION vector;"
-                        )
-                except Exception as e:
-                    logger.error(f"Error checking vector extension: {e}")
-                    raise
-
-    async def ensure_schema_exists(self):
-        """Ensure the required tables exist."""
-        table_name = f"lightrag_{self.namespace}"
-        async with self.db.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    # Create table based on namespace
-                    if self.namespace == "chunks":
-                        await cur.execute(f"""
-                            CREATE TABLE IF NOT EXISTS {table_name} (
-                                id TEXT PRIMARY KEY,
-                                content TEXT,
-                                content_vector vector({self.embedding_dim}),
-                                metadata JSONB,
-                                workspace TEXT,
-                                createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )
-                        """)
-                    else:  # entities or relationships
-                        await cur.execute(f"""
-                            CREATE TABLE IF NOT EXISTS {table_name} (
-                                id TEXT PRIMARY KEY,
-                                name TEXT,
-                                content TEXT,
-                                content_vector vector({self.embedding_dim}),
-                                metadata JSONB,
-                                workspace TEXT,
-                                createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )
-                        """)
-
-                    # Create vector index
-                    await cur.execute(f"""
-                        CREATE INDEX IF NOT EXISTS idx_{table_name}_vector
-                        ON {table_name}
-                        USING ivfflat (content_vector vector_cosine_ops)
-                        WITH (lists = 100)
-                    """)
-                except Exception as e:
-                    logger.error(f"Error creating schema: {e}")
-                    raise
-
-    async def drop(self):
-        """Drop the tables."""
-        table_name = f"lightrag_{self.namespace}"
-        async with self.db.pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(f"DROP TABLE IF EXISTS {table_name}")
-                except Exception as e:
-                    logger.error(f"Error dropping table: {e}")
-                    raise
-
+    @ensure_table_exists()
     async def upsert(self, data: Dict[str, Dict[str, Any]]):
         """Insert or update vectors."""
         if not data:
@@ -725,6 +675,7 @@ class PostgresVectorStorage(BaseVectorStorage):
 
         return list(data.keys())
 
+    @ensure_table_exists()
     async def query(self, query: str, top_k: int = 5, metadata: Optional[Dict] = None) -> List[Dict]:
         """Query vectors by similarity."""
         table_name = f"lightrag_{self.namespace}"
@@ -787,5 +738,62 @@ class PostgresVectorStorage(BaseVectorStorage):
                 except Exception as e:
                     logger.error(f"Error during vector search: {e}")
                     return []
+
+    async def check_tables(self):
+        """Ensure required tables and extensions exist."""
+        await self._check_vector_extension()
+        table_name = self.namespace_table_map.get(self.namespace)
+        if not table_name:
+            return
+
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                # Create table with vector support
+                await cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {table_name} (
+                        id TEXT PRIMARY KEY,
+                        name TEXT,
+                        content TEXT,
+                        content_vector vector({self.embedding_dim}),
+                        metadata JSONB,
+                        workspace TEXT,
+                        createtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updatetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await conn.commit()
+
+    async def _check_vector_extension(self):
+        """Check if the vector extension is installed."""
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute("SELECT * FROM pg_extension WHERE extname = 'vector'")
+                    if not await cur.fetchone():
+                        await cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                        await conn.commit()
+                        logger.info("Created vector extension")
+                except Exception as e:
+                    logger.error(f"Error checking/creating vector extension: {e}")
+                    raise RuntimeError(
+                        "PostgreSQL vector extension not installed. Please install it first: "
+                        "CREATE EXTENSION vector;"
+                    )
+
     async def close(self):
         await self.db.close()
+
+    async def drop(self):
+        """Drop the table for this namespace."""
+        table_name = f"lightrag_{self.namespace}"
+
+        async with self.db.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                try:
+                    await cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+                    await conn.commit()
+                    logger.info(f"Dropped table {table_name}")
+                except Exception as e:
+                    logger.error(f"Error dropping table {table_name}: {e}")
+                    await conn.rollback()
+                    raise

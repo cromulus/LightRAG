@@ -47,7 +47,6 @@ CONFIG_FACTORIES = {
 
 async def age_setup(store):
     await store.drop()
-    await store.check_tables()
 
 
 async def networkx_setup(store):

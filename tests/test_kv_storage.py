@@ -41,7 +41,6 @@ async def json_setup(store):
 
 async def postgres_setup(store):
     await store.drop() # drop all old tables
-    await store.check_tables() # create new tables
 
 SETUP_HANDLERS = {
     "json": json_setup,
