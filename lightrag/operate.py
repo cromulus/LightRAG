@@ -136,12 +136,13 @@ async def _merge_nodes_then_upsert(
     nodes_data: list[dict],
     knowledge_graph_inst: BaseGraphStorage,
     global_config: dict,
+    user_id: str = "default",
 ):
     already_entity_types = []
     already_source_ids = []
     already_description = []
 
-    already_node = await knowledge_graph_inst.get_node(entity_name)
+    already_node = await knowledge_graph_inst.get_node(entity_name, user_id=user_id)
     if already_node is not None:
         already_entity_types.append(already_node["entity_type"])
         already_source_ids.extend(
@@ -173,6 +174,7 @@ async def _merge_nodes_then_upsert(
     await knowledge_graph_inst.upsert_node(
         entity_name,
         node_data=node_data,
+        user_id=user_id,
     )
     node_data["entity_name"] = entity_name
     return node_data
@@ -184,14 +186,15 @@ async def _merge_edges_then_upsert(
     edges_data: list[dict],
     knowledge_graph_inst: BaseGraphStorage,
     global_config: dict,
+    user_id: str = "default",
 ):
     already_weights = []
     already_source_ids = []
     already_description = []
     already_keywords = []
 
-    if await knowledge_graph_inst.has_edge(src_id, tgt_id):
-        already_edge = await knowledge_graph_inst.get_edge(src_id, tgt_id)
+    if await knowledge_graph_inst.has_edge(src_id, tgt_id, user_id=user_id):
+        already_edge = await knowledge_graph_inst.get_edge(src_id, tgt_id, user_id=user_id)
         already_weights.append(already_edge["weight"])
         already_source_ids.extend(
             split_string_by_multi_markers(already_edge["source_id"], [GRAPH_FIELD_SEP])
@@ -212,7 +215,7 @@ async def _merge_edges_then_upsert(
         set([dp["source_id"] for dp in edges_data] + already_source_ids)
     )
     for need_insert_id in [src_id, tgt_id]:
-        if not (await knowledge_graph_inst.has_node(need_insert_id)):
+        if not (await knowledge_graph_inst.has_node(need_insert_id, user_id=user_id)):
             await knowledge_graph_inst.upsert_node(
                 need_insert_id,
                 node_data={
@@ -220,6 +223,7 @@ async def _merge_edges_then_upsert(
                     "description": description,
                     "entity_type": '"UNKNOWN"',
                 },
+                user_id=user_id,
             )
     description = await _handle_entity_relation_summary(
         f"({src_id}, {tgt_id})", description, global_config
@@ -233,6 +237,7 @@ async def _merge_edges_then_upsert(
             keywords=keywords,
             source_id=source_id,
         ),
+        user_id=user_id,
     )
 
     edge_data = dict(
@@ -251,6 +256,7 @@ async def extract_entities(
     entity_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
     global_config: dict,
+    user_id: str = "default",
 ) -> Union[BaseGraphStorage, None]:
     use_llm_func: callable = global_config["llm_model_func"]
     entity_extract_max_gleaning = global_config["entity_extract_max_gleaning"]
@@ -388,7 +394,7 @@ async def extract_entities(
     for result in tqdm_async(
         asyncio.as_completed(
             [
-                _merge_nodes_then_upsert(k, v, knowledge_graph_inst, global_config)
+                _merge_nodes_then_upsert(k, v, knowledge_graph_inst, global_config, user_id)
                 for k, v in maybe_nodes.items()
             ]
         ),
@@ -404,7 +410,7 @@ async def extract_entities(
         asyncio.as_completed(
             [
                 _merge_edges_then_upsert(
-                    k[0], k[1], v, knowledge_graph_inst, global_config
+                    k[0], k[1], v, knowledge_graph_inst, global_config, user_id
                 )
                 for k, v in maybe_edges.items()
             ]
@@ -434,7 +440,7 @@ async def extract_entities(
             }
             for dp in all_entities_data
         }
-        await entity_vdb.upsert(data_for_vdb)
+        await entity_vdb.upsert(data_for_vdb, user_id=user_id)
 
     if relationships_vdb is not None:
         data_for_vdb = {
@@ -448,7 +454,7 @@ async def extract_entities(
             }
             for dp in all_relationships_data
         }
-        await relationships_vdb.upsert(data_for_vdb)
+        await relationships_vdb.upsert(data_for_vdb, user_id=user_id)
 
     return knowledge_graph_inst
 
@@ -462,6 +468,7 @@ async def kg_query(
     query_param: QueryParam,
     global_config: dict,
     hashing_kv: BaseKVStorage = None,
+    user_id: str = "default",
 ) -> str:
     # Handle cache
     use_model_func = global_config["llm_model_func"]
@@ -851,9 +858,11 @@ async def _find_most_related_edges_from_entities(
     all_edges_pack = await asyncio.gather(
         *[knowledge_graph_inst.get_edge(e[0], e[1]) for e in all_edges]
     )
+
     all_edges_degree = await asyncio.gather(
         *[knowledge_graph_inst.edge_degree(e[0], e[1]) for e in all_edges]
     )
+
     all_edges_data = [
         {"src_tgt": k, "rank": d, **v}
         for k, v, d in zip(all_edges, all_edges_pack, all_edges_degree)
@@ -1059,13 +1068,14 @@ def combine_contexts(entities, relationships, sources):
 
 
 async def naive_query(
-    query,
+    query: str,
     chunks_vdb: BaseVectorStorage,
     text_chunks_db: BaseKVStorage[TextChunkSchema],
     query_param: QueryParam,
     global_config: dict,
     hashing_kv: BaseKVStorage = None,
-):
+    user_id: str = "default",
+) -> str:
     # Handle cache
     use_model_func = global_config["llm_model_func"]
     args_hash = compute_args_hash(query_param.mode, query)
@@ -1075,12 +1085,16 @@ async def naive_query(
     if cached_response is not None:
         return cached_response
 
-    results = await chunks_vdb.query(query, top_k=query_param.top_k)
-    if not len(results):
-        return PROMPTS["fail_response"]
+    # Get relevant chunks
+    results = await chunks_vdb.query(
+        query,
+        top_k=query_param.top_k,
+        user_id=user_id,
+    )
 
-    chunks_ids = [r["id"] for r in results]
-    chunks = await text_chunks_db.get_by_ids(chunks_ids)
+    # Get chunk contents
+    chunk_ids = [r["id"] for r in results]
+    chunks = await text_chunks_db.get_by_ids(chunk_ids, user_id=user_id)
 
     # Filter out invalid chunks
     valid_chunks = [

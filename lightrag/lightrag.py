@@ -289,7 +289,7 @@ class LightRAG:
         loop = always_get_an_event_loop()
         return loop.run_until_complete(self.ainsert(string_or_strings))
 
-    async def ainsert(self, string_or_strings):
+    async def ainsert(self, string_or_strings, user_id: str = "default"):
         update_storage = False
         try:
             if isinstance(string_or_strings, str):
@@ -299,7 +299,7 @@ class LightRAG:
                 compute_mdhash_id(c.strip(), prefix="doc-"): {"content": c.strip()}
                 for c in string_or_strings
             }
-            _add_doc_keys = await self.full_docs.filter_keys(list(new_docs.keys()))
+            _add_doc_keys = await self.full_docs.filter_keys(list(new_docs.keys()), user_id=user_id)
             new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
             if not len(new_docs):
                 logger.warning("All docs are already in the storage")
@@ -325,7 +325,7 @@ class LightRAG:
                 }
                 inserting_chunks.update(chunks)
             _add_chunk_keys = await self.text_chunks.filter_keys(
-                list(inserting_chunks.keys())
+                list(inserting_chunks.keys()), user_id=user_id
             )
             inserting_chunks = {
                 k: v for k, v in inserting_chunks.items() if k in _add_chunk_keys
@@ -335,7 +335,7 @@ class LightRAG:
                 return
             logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
 
-            await self.chunks_vdb.upsert(inserting_chunks)
+            await self.chunks_vdb.upsert(inserting_chunks, user_id=user_id)
 
             logger.info("[Entity Extraction]...")
             maybe_new_kg = await extract_entities(
@@ -344,14 +344,15 @@ class LightRAG:
                 entity_vdb=self.entities_vdb,
                 relationships_vdb=self.relationships_vdb,
                 global_config=asdict(self),
+                user_id=user_id,
             )
             if maybe_new_kg is None:
                 logger.warning("No new entities and relationships found")
                 return
             self.chunk_entity_relation_graph = maybe_new_kg
 
-            await self.full_docs.upsert(new_docs)
-            await self.text_chunks.upsert(inserting_chunks)
+            await self.full_docs.upsert(new_docs, user_id=user_id)
+            await self.text_chunks.upsert(inserting_chunks, user_id=user_id)
         finally:
             if update_storage:
                 await self._insert_done()
@@ -376,7 +377,7 @@ class LightRAG:
         loop = always_get_an_event_loop()
         return loop.run_until_complete(self.ainsert_custom_kg(custom_kg))
 
-    async def ainsert_custom_kg(self, custom_kg: dict):
+    async def ainsert_custom_kg(self, custom_kg: dict, user_id: str = "default"):
         update_storage = False
         try:
             # Insert chunks into vector storage
@@ -393,9 +394,9 @@ class LightRAG:
                 update_storage = True
 
             if self.chunks_vdb is not None and all_chunks_data:
-                await self.chunks_vdb.upsert(all_chunks_data)
+                await self.chunks_vdb.upsert(all_chunks_data, user_id=user_id)
             if self.text_chunks is not None and all_chunks_data:
-                await self.text_chunks.upsert(all_chunks_data)
+                await self.text_chunks.upsert(all_chunks_data, user_id=user_id)
 
             # Insert entities into knowledge graph
             all_entities_data = []
@@ -403,7 +404,6 @@ class LightRAG:
                 entity_name = f'"{entity_data["entity_name"].upper()}"'
                 entity_type = entity_data.get("entity_type", "UNKNOWN")
                 description = entity_data.get("description", "No description provided")
-                # source_id = entity_data["source_id"]
                 source_chunk_id = entity_data.get("source_id", "UNKNOWN")
                 source_id = chunk_to_source_map.get(source_chunk_id, "UNKNOWN")
 
@@ -421,7 +421,7 @@ class LightRAG:
                 }
                 # Insert node data into the knowledge graph
                 await self.chunk_entity_relation_graph.upsert_node(
-                    entity_name, node_data=node_data
+                    entity_name, node_data=node_data, user_id=user_id
                 )
                 node_data["entity_name"] = entity_name
                 all_entities_data.append(node_data)
@@ -435,7 +435,6 @@ class LightRAG:
                 description = relationship_data["description"]
                 keywords = relationship_data["keywords"]
                 weight = relationship_data.get("weight", 1.0)
-                # source_id = relationship_data["source_id"]
                 source_chunk_id = relationship_data.get("source_id", "UNKNOWN")
                 source_id = chunk_to_source_map.get(source_chunk_id, "UNKNOWN")
 
@@ -448,7 +447,7 @@ class LightRAG:
                 # Check if nodes exist in the knowledge graph
                 for need_insert_id in [src_id, tgt_id]:
                     if not (
-                        await self.chunk_entity_relation_graph.has_node(need_insert_id)
+                        await self.chunk_entity_relation_graph.has_node(need_insert_id, user_id=user_id)
                     ):
                         await self.chunk_entity_relation_graph.upsert_node(
                             need_insert_id,
@@ -457,6 +456,7 @@ class LightRAG:
                                 "description": "UNKNOWN",
                                 "entity_type": "UNKNOWN",
                             },
+                            user_id=user_id,
                         )
 
                 # Insert edge into the knowledge graph
@@ -469,6 +469,7 @@ class LightRAG:
                         "keywords": keywords,
                         "source_id": source_id,
                     },
+                    user_id=user_id,
                 )
                 edge_data = {
                     "src_id": src_id,
@@ -488,7 +489,7 @@ class LightRAG:
                     }
                     for dp in all_entities_data
                 }
-                await self.entities_vdb.upsert(data_for_vdb)
+                await self.entities_vdb.upsert(data_for_vdb, user_id=user_id)
 
             # Insert relationships into vector storage if needed
             if self.relationships_vdb is not None:
@@ -503,7 +504,7 @@ class LightRAG:
                     }
                     for dp in all_relationships_data
                 }
-                await self.relationships_vdb.upsert(data_for_vdb)
+                await self.relationships_vdb.upsert(data_for_vdb, user_id=user_id)
         finally:
             if update_storage:
                 await self._insert_done()
@@ -512,7 +513,7 @@ class LightRAG:
         loop = always_get_an_event_loop()
         return loop.run_until_complete(self.aquery(query, param))
 
-    async def aquery(self, query: str, param: QueryParam = QueryParam()):
+    async def aquery(self, query: str, param: QueryParam = QueryParam(), user_id: str = "default"):
         if param.mode in ["local", "global", "hybrid"]:
             response = await kg_query(
                 query,
@@ -530,6 +531,7 @@ class LightRAG:
                     global_config=asdict(self),
                     embedding_func=None,
                 ),
+                user_id=user_id,
             )
         elif param.mode == "naive":
             response = await naive_query(
@@ -546,6 +548,7 @@ class LightRAG:
                     global_config=asdict(self),
                     embedding_func=None,
                 ),
+                user_id=user_id,
             )
         else:
             raise ValueError(f"Unknown mode {param.mode}")
@@ -564,20 +567,20 @@ class LightRAG:
         loop = always_get_an_event_loop()
         return loop.run_until_complete(self.adelete_by_entity(entity_name))
 
-    async def adelete_by_entity(self, entity_name: str):
+    async def adelete_by_entity(self, entity_name: str, user_id: str = "default"):
         entity_name = f'"{entity_name.upper()}"'
 
         try:
-            await self.entities_vdb.delete_entity(entity_name)
-            await self.relationships_vdb.delete_relation(entity_name)
-            await self.chunk_entity_relation_graph.delete_node(entity_name)
+            await self.entities_vdb.delete_entity(entity_name, user_id=user_id)
+            await self.relationships_vdb.delete_relation(entity_name, user_id=user_id)
+            await self.chunk_entity_relation_graph.delete_node(entity_name, user_id=user_id)
 
             logger.info(
-                f"Entity '{entity_name}' and its relationships have been deleted."
+                f"Entity '{entity_name}' and its relationships have been deleted for user {user_id}."
             )
             await self._delete_by_entity_done()
         except Exception as e:
-            logger.error(f"Error while deleting entity '{entity_name}': {e}")
+            logger.error(f"Error while deleting entity '{entity_name}' for user {user_id}: {e}")
 
     async def _delete_by_entity_done(self):
         tasks = []

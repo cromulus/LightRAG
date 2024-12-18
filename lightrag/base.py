@@ -51,12 +51,13 @@ class BaseVectorStorage(StorageNameSpace):
     embedding_func: EmbeddingFunc
     meta_fields: set = field(default_factory=set)
 
-    async def query(self, query: str, top_k: int) -> list[dict]:
+    async def query(self, query: str, top_k: int, user_id: str = "default") -> list[dict]:
         raise NotImplementedError
 
-    async def upsert(self, data: dict[str, dict]):
+    async def upsert(self, data: dict[str, dict], user_id: str = "default"):
         """Use 'content' field from value for embedding, use key as id.
-        If embedding_func is None, use 'embedding' field from value
+        If embedding_func is None, use 'embedding' field from value.
+        Data will be stored with user_id field.
         """
         raise NotImplementedError
 
@@ -65,25 +66,25 @@ class BaseVectorStorage(StorageNameSpace):
 class BaseKVStorage(Generic[T], StorageNameSpace):
     embedding_func: EmbeddingFunc
 
-    async def all_keys(self) -> list[str]:
+    async def all_keys(self, user_id: str = "default") -> list[str]:
         raise NotImplementedError
 
-    async def get_by_id(self, id: str) -> Union[T, None]:
+    async def get_by_id(self, id: str, user_id: str = "default") -> Union[T, None]:
         raise NotImplementedError
 
     async def get_by_ids(
-        self, ids: list[str], fields: Union[set[str], None] = None
+        self, ids: list[str], fields: Union[set[str], None] = None, user_id: str = "default"
     ) -> list[Union[T, None]]:
         raise NotImplementedError
 
-    async def filter_keys(self, data: list[str]) -> set[str]:
+    async def filter_keys(self, data: list[str], user_id: str = "default") -> set[str]:
         """return un-exist keys"""
         raise NotImplementedError
 
-    async def upsert(self, data: dict[str, T]):
+    async def upsert(self, data: dict[str, T], user_id: str = "default"):
         raise NotImplementedError
 
-    async def drop(self):
+    async def drop(self, user_id: str = "default"):
         raise NotImplementedError
 
 
@@ -91,41 +92,41 @@ class BaseKVStorage(Generic[T], StorageNameSpace):
 class BaseGraphStorage(StorageNameSpace):
     embedding_func: EmbeddingFunc = None
 
-    async def has_node(self, node_id: str) -> bool:
+    async def has_node(self, node_id: str, user_id: str = "default") -> bool:
         raise NotImplementedError
 
-    async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
+    async def has_edge(self, source_node_id: str, target_node_id: str, user_id: str = "default") -> bool:
         raise NotImplementedError
 
-    async def node_degree(self, node_id: str) -> int:
+    async def node_degree(self, node_id: str, user_id: str = "default") -> int:
         raise NotImplementedError
 
-    async def edge_degree(self, src_id: str, tgt_id: str) -> int:
+    async def edge_degree(self, src_id: str, tgt_id: str, user_id: str = "default") -> int:
         raise NotImplementedError
 
-    async def get_node(self, node_id: str) -> Union[dict, None]:
+    async def get_node(self, node_id: str, user_id: str = "default") -> Union[dict, None]:
         raise NotImplementedError
 
     async def get_edge(
-        self, source_node_id: str, target_node_id: str
+        self, source_node_id: str, target_node_id: str, user_id: str = "default"
     ) -> Union[dict, None]:
         raise NotImplementedError
 
     async def get_node_edges(
-        self, source_node_id: str
+        self, source_node_id: str, user_id: str = "default"
     ) -> Union[list[tuple[str, str]], None]:
         raise NotImplementedError
 
-    async def upsert_node(self, node_id: str, node_data: dict[str, str]):
+    async def upsert_node(self, node_id: str, node_data: dict[str, str], user_id: str = "default"):
         raise NotImplementedError
 
     async def upsert_edge(
-        self, source_node_id: str, target_node_id: str, edge_data: dict[str, str]
+        self, source_node_id: str, target_node_id: str, edge_data: dict[str, str], user_id: str = "default"
     ):
         raise NotImplementedError
 
-    async def delete_node(self, node_id: str):
+    async def delete_node(self, node_id: str, user_id: str = "default"):
         raise NotImplementedError
 
-    async def embed_nodes(self, algorithm: str) -> tuple[np.ndarray, list[str]]:
+    async def embed_nodes(self, algorithm: str, user_id: str = "default") -> tuple[np.ndarray, list[str]]:
         raise NotImplementedError("Node embedding is not used in lightrag.")
