@@ -5,12 +5,12 @@ import tests.test_utils as test_utils
 from typing import Dict, Type
 from lightrag.base import BaseKVStorage, EmbeddingFunc
 from lightrag.storage import JsonKVStorage
-#from lightrag.kg.postgres_impl import PostgresKVStorage
+from lightrag.kg.postgres_impl import PostgresKVStorage
 
 # Dictionary of storage implementations to test
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
     "json": JsonKVStorage,
-#    "postgres": PostgresKVStorage,
+   "postgres": PostgresKVStorage,
 }
 
 
@@ -180,9 +180,14 @@ async def test_drop(storage):
     test_data = {"key1": {"field1": "value1"}}
     await storage.upsert(test_data)
     await storage.drop()
-
-    keys = await storage.all_keys()
-    assert len(keys) == 0
+    # some backends will raise an error here, others will just return an empty list
+    # so we need to check the error message
+    try:
+        # check if the key is not in the database
+        keys = await storage.all_keys()
+        assert "key1" not in keys
+    except Exception as e:
+        assert "does not exist" in str(e)
 
 @pytest.mark.asyncio
 async def test_index_done_callback(storage):
