@@ -66,6 +66,26 @@ def impl_name(request):
 def namespace(request):
     return request.param
 
+def pytest_generate_tests(metafunc):
+    # Add ids to show storage implementation and namespace in test names
+    if "storage" in metafunc.fixturenames:
+        test_ids = [
+            f"{impl}-{ns}"
+            for impl in STORAGE_IMPLEMENTATIONS.keys()
+            for ns in ["full_docs", "text_chunks"]
+        ]
+        metafunc.parametrize(
+            "storage",
+            [
+                pytest.param(
+                    metafunc.getfixturevalue("storage"),
+                    id=test_id
+                )
+                for test_id in test_ids
+            ],
+            indirect=True
+        )
+
 @pytest.fixture
 async def storage(impl_name, namespace):
     storage_class = STORAGE_IMPLEMENTATIONS[impl_name]
