@@ -5,6 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
+from functools import wraps
 
 import psycopg
 from psycopg.rows import namedtuple_row
@@ -37,6 +38,35 @@ class AGEQueryException(Exception):
 
     def get_details(self) -> Any:
         return self.details
+
+
+def ensure_graph_exists():
+    """
+    Decorator that ensures the AGE graph exists before executing a query.
+    If a query fails due to missing graph, creates it and retries once.
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            try:
+                # Try original query first
+                return await func(self, *args, **kwargs)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "graph" in error_msg and ("not found" in error_msg or "does not exist" in error_msg):
+                    logger.info(f"Graph missing, attempting to create: {error_msg}")
+                    try:
+                        # Create graph and retry query
+                        await self.check_tables()
+                        return await func(self, *args, **kwargs)
+                    except Exception as retry_error:
+                        logger.error(f"Failed to create graph and retry query: {retry_error}")
+                        raise
+                else:
+                    # If error is not about missing graph, re-raise
+                    raise
+        return wrapper
+    return decorator
 
 
 @dataclass
@@ -360,6 +390,7 @@ class AGEStorage(BaseGraphStorage):
 
                 return result
 
+    @ensure_graph_exists()
     async def has_node(self, node_id: str) -> bool:
         entity_name_label = node_id.strip('"')
 
@@ -377,6 +408,7 @@ class AGEStorage(BaseGraphStorage):
 
         return single_result["node_exists"]
 
+    @ensure_graph_exists()
     async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
         entity_name_label_source = source_node_id.strip('"')
         entity_name_label_target = target_node_id.strip('"')
@@ -398,6 +430,7 @@ class AGEStorage(BaseGraphStorage):
         )
         return single_result["edge_exists"]
 
+    @ensure_graph_exists()
     async def get_node(self, node_id: str) -> Union[dict, None]:
         entity_name_label = node_id.strip('"')
         query = """
@@ -417,6 +450,7 @@ class AGEStorage(BaseGraphStorage):
             return node_dict
         return None
 
+    @ensure_graph_exists()
     async def node_degree(self, node_id: str) -> int:
         entity_name_label = node_id.strip('"')
 
@@ -436,6 +470,7 @@ class AGEStorage(BaseGraphStorage):
             )
             return edge_count
 
+    @ensure_graph_exists()
     async def edge_degree(self, src_id: str, tgt_id: str) -> int:
         entity_name_label_source = src_id.strip('"')
         entity_name_label_target = tgt_id.strip('"')
@@ -454,6 +489,7 @@ class AGEStorage(BaseGraphStorage):
         )
         return degrees
 
+    @ensure_graph_exists()
     async def get_edge(
         self, source_node_id: str, target_node_id: str
     ) -> Union[dict, None]:
@@ -490,6 +526,7 @@ class AGEStorage(BaseGraphStorage):
             )
             return result
 
+    @ensure_graph_exists()
     async def get_node_edges(self, source_node_id: str) -> List[Tuple[str, str]]:
         """
         Retrieves all edges (relationships) for a particular node identified by its label.
@@ -528,6 +565,7 @@ class AGEStorage(BaseGraphStorage):
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type((AGEQueryException,)),
     )
+    @ensure_graph_exists()
     async def upsert_node(self, node_id: str, node_data: Dict[str, Any]):
         """
         Upsert a node in the AGE database.
@@ -563,6 +601,7 @@ class AGEStorage(BaseGraphStorage):
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type((AGEQueryException,)),
     )
+    @ensure_graph_exists()
     async def upsert_edge(
         self, source_node_id: str, target_node_id: str, edge_data: Dict[str, Any]
     ):
@@ -623,33 +662,13 @@ class AGEStorage(BaseGraphStorage):
             await self._driver.putconn(connection)
 
 
+    @ensure_graph_exists()
     async def check_tables(self):
         """Ensure that the AGE graph exists, create it if it doesn't."""
         graph_name = self.graph_name
         check_graph_query = f"SELECT * FROM ag_catalog.ag_graph WHERE name = '{graph_name}';"
 
         async with self._driver.connection() as conn:
-            # First try to drop any existing schema/graph
-            try:
-                drop_graph_query = self.DDL_STATEMENTS["drop_graph"].format(graph_name=graph_name)
-                async with conn.cursor() as cur:
-                    await cur.execute(drop_graph_query)
-                    await conn.commit()
-            except Exception as e:
-                # Ignore errors during drop - the graph might not exist
-                await conn.rollback()
-                logger.debug(f"Error dropping graph '{graph_name}': {str(e)}")
-
-            # Now try to drop the schema if it exists
-            try:
-                async with conn.cursor() as cur:
-                    await cur.execute(f"DROP SCHEMA IF EXISTS {graph_name} CASCADE")
-                    await conn.commit()
-            except Exception as e:
-                await conn.rollback()
-                logger.debug(f"Error dropping schema '{graph_name}': {str(e)}")
-
-            # Finally create the new graph
             async with conn.cursor() as cur:
                 await cur.execute(check_graph_query)
                 graph_exists = await cur.fetchone()
@@ -663,8 +682,9 @@ class AGEStorage(BaseGraphStorage):
                         await conn.rollback()
                         raise AGEQueryException(f"Failed to create graph '{graph_name}': {str(e)}")
                 else:
-                    logger.info(f"Graph '{graph_name}' already exists.")
+                    logger.debug(f"Graph '{graph_name}' already exists.")
 
+    @ensure_graph_exists()
     async def drop(self):
         """Drop the AGE graph if it exists."""
         graph_name = self.graph_name
@@ -679,6 +699,7 @@ class AGEStorage(BaseGraphStorage):
                 except Exception as e:
                     logger.error(f"Error dropping graph '{graph_name}': {e}")
 
+    @ensure_graph_exists()
     async def delete_node(self, node_id: str):
         """Delete a node and all its relationships from the graph."""
         entity_name_label = node_id.strip('"')
