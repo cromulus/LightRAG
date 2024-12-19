@@ -28,7 +28,6 @@ class JsonKVStorage(BaseKVStorage):
     DEFAULT_EMBEDDING_DIM: int = 1536
 
     def __post_init__(self):
-        # Validate embedding dimension first
         self.embedding_dim = (
             getattr(self.embedding_func, "embedding_dim", None) or
             self.global_config.get("embedding_dim", self.DEFAULT_EMBEDDING_DIM)
@@ -37,100 +36,121 @@ class JsonKVStorage(BaseKVStorage):
         if not isinstance(self.embedding_dim, int) or self.embedding_dim <= 0:
             raise ValueError(f"Invalid embedding dimension: {self.embedding_dim}")
 
-        # Then proceed with existing initialization
-        working_dir = self.global_config["working_dir"]
-        self._file_name = os.path.join(working_dir, f"kv_store_{self.namespace}.json")
-        self._data = load_json(self._file_name) or {}
-        logger.info(f"Load KV {self.namespace} with {len(self._data)} data")
+        self.working_dir = self.global_config["working_dir"]
+        self._data_cache = {}  # Cache per user_id
 
-    def _strip_internal_fields(self, data: dict) -> dict:
-        """Remove internal fields like user_id from the data for backward compatibility"""
-        if data is None:
-            return None
-        return {k: v for k, v in data.items() if k != "user_id"}
+    def _get_user_file_path(self, user_id: str = "default") -> str:
+        """Get the file path for a specific user's data"""
+        user_dir = os.path.join(self.working_dir, user_id)
+        return os.path.join(user_dir, f"kv_store_{self.namespace}.json")
+
+    def _ensure_user_directory(self, user_id: str = "default"):
+        """Ensure the user's directory exists"""
+        user_dir = os.path.dirname(self._get_user_file_path(user_id))
+        if not os.path.exists(user_dir):
+            os.makedirs(user_dir)
+            logger.info(f"Created user directory: {user_dir}")
+
+    def _load_user_data(self, user_id: str = "default") -> dict:
+        """Load data for a specific user"""
+        if user_id not in self._data_cache:
+            file_path = self._get_user_file_path(user_id)
+            if os.path.exists(file_path):
+                self._data_cache[user_id] = load_json(file_path) or {}
+            else:
+                self._data_cache[user_id] = {}
+        return self._data_cache[user_id]
 
     async def all_keys(self, user_id: str = "default") -> list[str]:
-        return [k for k, v in self._data.items() if v.get("user_id", "default") == user_id]
-
-    async def index_done_callback(self):
-        write_json(self._data, self._file_name)
+        return list(self._load_user_data(user_id).keys())
 
     async def get_by_id(self, id: str, user_id: str = "default"):
-        data = self._data.get(id)
-        if data and data.get("user_id", "default") == user_id:
-            return self._strip_internal_fields(data)
-        return None
+        return self._load_user_data(user_id).get(id)
 
     async def get_by_ids(self, ids: list[str], fields=None, user_id: str = "default"):
+        user_data = self._load_user_data(user_id)
         if fields is None:
-            return [
-                self._strip_internal_fields(self._data.get(id))
-                if self._data.get(id) and self._data[id].get("user_id", "default") == user_id
-                else None
-                for id in ids
-            ]
+            return [user_data.get(id) for id in ids]
         return [
-            (
-                self._strip_internal_fields({k: v for k, v in self._data[id].items() if k in fields})
-                if self._data.get(id) and self._data[id].get("user_id", "default") == user_id
-                else None
-            )
+            {k: v for k, v in user_data[id].items() if k in fields}
+            if id in user_data else None
             for id in ids
         ]
 
     async def filter_keys(self, data: list[str], user_id: str = "default") -> set[str]:
-        return set([
-            s for s in data
-            if s not in self._data or
-            self._data[s].get("user_id", "default") != user_id
-        ])
+        user_data = self._load_user_data(user_id)
+        return set(k for k in data if k not in user_data)
 
     async def upsert(self, data: dict[str, dict], user_id: str = "default"):
-        left_data = {
-            k: {**v, "user_id": user_id}
-            for k, v in data.items()
-            if k not in self._data or self._data[k].get("user_id", "default") != user_id
-        }
-        self._data.update(left_data)
-        return {k: self._strip_internal_fields(v) for k, v in left_data.items()}
+        user_data = self._load_user_data(user_id)
+        user_data.update(data)
+        self._ensure_user_directory(user_id)
+        write_json(user_data, self._get_user_file_path(user_id))
+        return data
 
     async def drop(self, user_id: str = "default"):
-        self._data = {
-            k: v
-            for k, v in self._data.items()
-            if v.get("user_id", "default") != user_id
-        }
+        """Remove all data for a specific user"""
+        if user_id in self._data_cache:
+            del self._data_cache[user_id]
+
+        file_path = self._get_user_file_path(user_id)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # Remove user directory if empty
+        user_dir = os.path.dirname(file_path)
+        if os.path.exists(user_dir) and not os.listdir(user_dir):
+            os.rmdir(user_dir)
 
 
 @dataclass
 class NanoVectorDBStorage(BaseVectorStorage):
     cosine_better_than_threshold: float = 0.2
+    embedding_dim: int = 384
 
     def __post_init__(self):
-        self._client_file_name = os.path.join(
-            self.global_config["working_dir"], f"vdb_{self.namespace}.json"
-        )
+        self.working_dir = self.global_config["working_dir"]
         self._max_batch_size = self.global_config["embedding_batch_num"]
-        self._client = NanoVectorDB(
-            self.embedding_func.embedding_dim, storage_file=self._client_file_name
-        )
+        self._clients = {}
         self.cosine_better_than_threshold = self.global_config.get(
             "cosine_better_than_threshold", self.cosine_better_than_threshold
         )
+        if hasattr(self.embedding_func, 'embedding_dim'):
+            self.embedding_dim = self.embedding_func.embedding_dim
+
+        # Initialize default user's storage
+        self._get_client("default")
+
+    def _get_client(self, user_id: str = "default") -> NanoVectorDB:
+        if user_id not in self._clients:
+            user_dir = os.path.join(self.working_dir, user_id)
+            os.makedirs(user_dir, exist_ok=True)
+            storage_file = os.path.join(user_dir, f"vdb_{self.namespace}.json")
+            self._clients[user_id] = NanoVectorDB(
+                self.embedding_dim,
+                storage_file=storage_file
+            )
+        return self._clients[user_id]
 
     async def upsert(self, data: dict[str, dict], user_id: str = "default"):
         logger.info(f"Inserting {len(data)} vectors to {self.namespace}")
         if not len(data):
             logger.warning("You insert an empty data to vector DB")
             return []
-        list_data = [
-            {
-                "__id__": k,
+
+        list_data = []
+        for k, v in data.items():
+            metadata = {k1: v1 for k1, v1 in v.items() if k1 in self.meta_fields}
+            metadata.update({
+                "content": v["content"],
+                "original_id": k  # Store original ID
+            })
+            list_data.append({
+                "__id__": k,  # Use original ID as __id__
                 "user_id": user_id,
-                **{k1: v1 for k1, v1 in v.items() if k1 in self.meta_fields},
-            }
-            for k, v in data.items()
-        ]
+                **metadata
+            })
+
         contents = [v["content"] for v in data.values()]
         batches = [
             contents[i : i + self._max_batch_size]
@@ -152,32 +172,46 @@ class NanoVectorDBStorage(BaseVectorStorage):
         if len(embeddings) == len(list_data):
             for i, d in enumerate(list_data):
                 d["__vector__"] = embeddings[i]
-            results = self._client.upsert(datas=list_data)
-            return results
+            client = self._get_client(user_id)
+            client.upsert(datas=list_data)
+            return list_data
         else:
             logger.error(
                 f"embedding is not 1-1 with data, {len(embeddings)} != {len(list_data)}"
             )
 
     async def query(self, query: str, top_k=5, user_id: str = "default"):
+        client = self._get_client(user_id)
         embedding = await self.embedding_func([query])
         embedding = embedding[0]
-        all_results = self._client.query(
+        results = client.query(
             query=embedding,
-            top_k=top_k * 2,  # Get more results since we'll filter by user_id
+            top_k=top_k,
             better_than_threshold=self.cosine_better_than_threshold,
         )
-        # Filter results by user_id and format them
-        results = [
-            {**dp, "id": dp["__id__"], "distance": dp["__metrics__"]}
-            for dp in all_results
-            if dp.get("user_id", "default") == user_id
-        ][:top_k]  # Limit to original top_k after filtering
-        return results
+        return [
+            {
+                **dp,
+                "id": dp.get("original_id", dp["__id__"]),  # Use original ID if available
+                "distance": dp["__metrics__"]
+            }
+            for dp in results
+        ]
+
+    async def index_done_callback(self):
+        for client in self._clients.values():
+            client.save()
+
+    async def drop(self, user_id: str = "default"):
+        if user_id in self._clients:
+            client_file = self._clients[user_id].storage_file  # Use storage_file instead of _storage_file
+            del self._clients[user_id]
+            if os.path.exists(client_file):
+                os.remove(client_file)
 
     @property
     def client_storage(self):
-        return getattr(self._client, "_NanoVectorDB__storage")
+        return getattr(self._get_client("default"), "_NanoVectorDB__storage")
 
     async def delete_entity(self, entity_name: str, user_id: str = "default"):
         try:
@@ -213,9 +247,6 @@ class NanoVectorDBStorage(BaseVectorStorage):
             logger.error(
                 f"Error while deleting relations for entity {entity_name}: {e}"
             )
-
-    async def index_done_callback(self):
-        self._client.save()
 
 
 @dataclass

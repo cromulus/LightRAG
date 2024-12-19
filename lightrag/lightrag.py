@@ -193,7 +193,7 @@ class LightRAG:
         ]
 
         if not os.path.exists(self.working_dir):
-            logger.info(f"Creating working directory {self.working_dir}")
+            logger.info(f"Creating base working directory {self.working_dir}")
             os.makedirs(self.working_dir)
 
         self.llm_response_cache = (
