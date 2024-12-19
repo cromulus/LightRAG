@@ -40,6 +40,8 @@ class JsonKVStorage(BaseKVStorage):
         self.working_dir = self.global_config["working_dir"]
         self._data_cache = {}  # Cache per user_id
 
+    supports_multi_user = True
+
     def _get_user_file_path(self, user_id: str = "default") -> str:
         """Get the file path for a specific user's data"""
         user_dir = os.path.join(self.working_dir, user_id)
@@ -121,6 +123,9 @@ class NanoVectorDBStorage(BaseVectorStorage):
 
         # Initialize default user's storage
         self._get_client("default")
+
+    # add this as a class variable
+    supports_multi_user = True
 
     def _get_client(self, user_id: str = "default") -> NanoVectorDB:
         if user_id not in self._clients:
@@ -252,6 +257,8 @@ class NanoVectorDBStorage(BaseVectorStorage):
 
 @dataclass
 class NetworkXStorage(BaseGraphStorage):
+    supports_multi_user = True
+
     def __post_init__(self):
         self.working_dir = self.global_config["working_dir"]
         self._graphs = {}  # Dictionary to store user-specific graphs

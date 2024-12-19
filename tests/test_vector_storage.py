@@ -362,4 +362,45 @@ async def test_cosine_threshold(storage):
     except AttributeError:
         pytest.skip(f"{storage.__class__.__name__} doesn't support cosine threshold filtering")
 
+@pytest.mark.asyncio
+async def test_vector_storage_multi_user_isolation(vector_storage):
+    """Test that vector storage properly isolates data between users when supported."""
+    if not vector_storage.supports_multi_user:
+        pytest.skip(f"{vector_storage.__class__.__name__} does not support multi-user")
+
+    # Test data
+    user1_data = [
+        {"id": "doc1", "content": "User 1 document 1"},
+        {"id": "doc2", "content": "User 1 document 2"}
+    ]
+    user2_data = [
+        {"id": "doc1", "content": "User 2 document 1"},
+        {"id": "doc2", "content": "User 2 document 2"}
+    ]
+
+    # Insert data for different users
+    await vector_storage.upsert(user1_data, user_id="user1")
+    await vector_storage.upsert(user2_data, user_id="user2")
+
+    # Query for user1
+    results_user1 = await vector_storage.query("document", top_k=2, user_id="user1")
+    assert all("User 1" in result["content"] for result in results_user1)
+
+    # Query for user2
+    results_user2 = await vector_storage.query("document", top_k=2, user_id="user2")
+    assert all("User 2" in result["content"] for result in results_user2)
+
+@pytest.mark.asyncio
+async def test_vector_storage_default_user():
+    """Test that vector storage works with default user (no user_id specified)."""
+    data = [
+        {"id": "doc1", "content": "Default user document"}
+    ]
+
+    # Should work without user_id
+    await vector_storage.upsert(data)
+    results = await vector_storage.query("document", top_k=1)
+    assert len(results) == 1
+    assert "Default user document" in results[0]["content"]
+
 

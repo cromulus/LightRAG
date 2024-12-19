@@ -50,7 +50,7 @@ class StorageNameSpace:
 class BaseVectorStorage(StorageNameSpace):
     embedding_func: EmbeddingFunc
     meta_fields: set = field(default_factory=set)
-
+    supports_multi_user = False
     async def query(self, query: str, top_k: int, user_id: str = "default") -> list[dict]:
         raise NotImplementedError
 
@@ -65,7 +65,7 @@ class BaseVectorStorage(StorageNameSpace):
 @dataclass
 class BaseKVStorage(Generic[T], StorageNameSpace):
     embedding_func: EmbeddingFunc
-
+    supports_multi_user = False
     async def all_keys(self, user_id: str = "default") -> list[str]:
         raise NotImplementedError
 
@@ -91,7 +91,7 @@ class BaseKVStorage(Generic[T], StorageNameSpace):
 @dataclass
 class BaseGraphStorage(StorageNameSpace):
     embedding_func: EmbeddingFunc = None
-
+    supports_multi_user = False
     async def has_node(self, node_id: str, user_id: str = "default") -> bool:
         raise NotImplementedError
 

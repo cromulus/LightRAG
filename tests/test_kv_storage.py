@@ -390,3 +390,33 @@ async def test_embedding_dimension_validation(impl_name, namespace):
                 )
             )
 
+@pytest.mark.asyncio
+async def test_kv_storage_multi_user_isolation(kv_storage):
+    """Test that KV storage properly isolates data between users when supported."""
+    if not kv_storage.supports_multi_user:
+        pytest.skip(f"{kv_storage.__class__.__name__} does not support multi-user")
+
+    # Test data
+    await kv_storage.set("shared_key", "user1_value", user_id="user1")
+    await kv_storage.set("shared_key", "user2_value", user_id="user2")
+
+    # Verify isolation
+    value1 = await kv_storage.get("shared_key", user_id="user1")
+    value2 = await kv_storage.get("shared_key", user_id="user2")
+
+    assert value1 == "user1_value"
+    assert value2 == "user2_value"
+
+    # Test deletion
+    await kv_storage.delete("shared_key", user_id="user1")
+    assert await kv_storage.get("shared_key", user_id="user1") is None
+    assert await kv_storage.get("shared_key", user_id="user2") == "user2_value"
+
+@pytest.mark.asyncio
+async def test_kv_storage_default_user(kv_storage):
+    """Test that KV storage works with default user (no user_id specified)."""
+    # Should work without user_id
+    await kv_storage.set("key", "value")
+    value = await kv_storage.get("key")
+    assert value == "value"
+

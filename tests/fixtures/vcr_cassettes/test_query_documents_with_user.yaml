@@ -1,0 +1,97 @@
+interactions:
+- request:
+    body: '{"content": "Test document about machine learning and AI", "metadata":
+      {"source": "test"}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '90'
+      content-type:
+      - application/json
+      host:
+      - testserver
+      user-agent:
+      - testclient
+      x-user-id:
+      - user1
+    method: POST
+    uri: http://testserver/documents
+  response:
+    body:
+      string: '{"status":"success","data":null,"message":"Document inserted successfully"}'
+    headers:
+      content-length:
+      - '75'
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"query": "machine learning", "top_k": 5}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '41'
+      content-type:
+      - application/json
+      host:
+      - testserver
+      user-agent:
+      - testclient
+      x-user-id:
+      - user1
+    method: POST
+    uri: http://testserver/query
+  response:
+    body:
+      string: '{"status":"success","data":"### Overview of Machine Learning\n\nMachine
+        Learning (ML) is a significant subset of artificial intelligence (AI) focused
+        on the development and utilization of algorithms that enable computers to
+        learn from data and make predictions. Due to its ability to analyze complex
+        datasets and improve performance over time, ML serves as a key driver of innovation
+        across various industries, including finance, healthcare, and technology.\n\n###
+        Relationship with Other Concepts\n\n**Deep Learning**: Within the realm of
+        machine learning, deep learning is a specialized area that utilizes neural
+        networks with multiple layers. This advanced technique allows for the analysis
+        of extensive and complex data sets with high accuracy, making it particularly
+        effective for tasks such as image and speech recognition. Deep learning fundamentally
+        relies on the underlying structure of neural networks, which are inspired
+        by the biological networks found in the human brain.\n\n**Neural Networks**:
+        At the core of deep learning are neural networks, which are computing systems
+        designed to simulate the brain''s functioning. These networks can process
+        and learn from input data, forming the basis for deep learning algorithms.\n\n**AI**:
+        Machine learning is not only a subset of AI but also plays a crucial role
+        in its advancement. Developments in machine learning techniques contribute
+        directly to progress in artificial intelligence, thereby enhancing the capabilities
+        of machines to behave intelligently.\n\n**Data Utilization**: The effectiveness
+        of machine learning algorithms hinges on the availability and quality of data.
+        Data serves as the foundational ingredient that these algorithms learn from,
+        allowing them to make informed predictions and analyses. The relationship
+        between data and machine learning algorithms is essential, as the quality
+        and quantity of data directly impact algorithm performance.\n\n### Conclusion\n\nIn
+        summary, Machine Learning is an evolving field positioned at the intersection
+        of data analysis and artificial intelligence, marked by its dependency on
+        data and its relationship with concepts such as deep learning and neural networks.
+        As machine learning technologies continue to advance, they hold the potential
+        to transform industries and lead to groundbreaking innovations that enhance
+        our daily lives.","message":null}'
+    headers:
+      content-length:
+      - '2369'
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1
