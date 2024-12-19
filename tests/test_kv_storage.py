@@ -36,8 +36,8 @@ from .test_utils import standard_cleanup
 
 # Dictionary of storage implementations to test
 STORAGE_IMPLEMENTATIONS: Dict[str, Type[BaseKVStorage]] = {
-"json": JsonKVStorage,
-   "postgres": PostgresKVStorage,
+    "json": JsonKVStorage,
+    "postgres": PostgresKVStorage,
 }
 
 # Test different embedding dimensions
