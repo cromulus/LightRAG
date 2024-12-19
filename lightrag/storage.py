@@ -7,6 +7,7 @@ from typing import Any, Union, cast
 import networkx as nx
 import numpy as np
 from nano_vectordb import NanoVectorDB
+import shutil
 
 from .utils import (
     logger,
@@ -106,7 +107,7 @@ class JsonKVStorage(BaseKVStorage):
 @dataclass
 class NanoVectorDBStorage(BaseVectorStorage):
     cosine_better_than_threshold: float = 0.2
-    embedding_dim: int = 384
+    embedding_dim: int = 384 # we should standardize on a default embedding dim
 
     def __post_init__(self):
         self.working_dir = self.global_config["working_dir"]
@@ -251,127 +252,89 @@ class NanoVectorDBStorage(BaseVectorStorage):
 
 @dataclass
 class NetworkXStorage(BaseGraphStorage):
-    @staticmethod
-    def load_nx_graph(file_name) -> nx.Graph:
-        if os.path.exists(file_name):
-            return nx.read_graphml(file_name)
-        return None
-
-    @staticmethod
-    def write_nx_graph(graph: nx.Graph, file_name):
-        logger.info(
-            f"Writing graph with {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges"
-        )
-        nx.write_graphml(graph, file_name)
-
     def __post_init__(self):
-        self._graphml_xml_file = os.path.join(
-            self.global_config["working_dir"], f"graph_{self.namespace}.graphml"
-        )
-        preloaded_graph = NetworkXStorage.load_nx_graph(self._graphml_xml_file)
-        if preloaded_graph is not None:
-            logger.info(
-                f"Loaded graph from {self._graphml_xml_file} with {preloaded_graph.number_of_nodes()} nodes, {preloaded_graph.number_of_edges()} edges"
-            )
-        self._graph = preloaded_graph or nx.Graph()
-        self._node_embed_algorithms = {
-            "node2vec": self._node2vec_embed,
-        }
+        self.working_dir = self.global_config["working_dir"]
+        self._graphs = {}  # Dictionary to store user-specific graphs
 
-    def _filter_by_user(self, data: dict, user_id: str) -> bool:
-        """Helper method to check if a node/edge belongs to a user"""
-        return data.get("user_id", "default") == user_id
+    def _get_user_graph_path(self, user_id: str = "default") -> str:
+        """Get the path for a user's graph file."""
+        user_dir = os.path.join(self.working_dir, user_id)
+        os.makedirs(user_dir, exist_ok=True)
+        return os.path.join(user_dir, f"{self.namespace}.graphml")
+
+    def _get_user_graph(self, user_id: str = "default") -> nx.Graph:
+        """Get or create a graph for specific user."""
+        if user_id not in self._graphs:
+            graph_path = self._get_user_graph_path(user_id)
+            if os.path.exists(graph_path):
+                try:
+                    self._graphs[user_id] = nx.read_graphml(graph_path)
+                except Exception as e:
+                    logger.error(f"Error loading graph for user {user_id}: {e}")
+                    self._graphs[user_id] = nx.Graph()
+            else:
+                self._graphs[user_id] = nx.Graph()
+        return self._graphs[user_id]
 
     async def has_node(self, node_id: str, user_id: str = "default") -> bool:
-        if not self._graph.has_node(node_id):
-            return False
-        return self._filter_by_user(self._graph.nodes[node_id], user_id)
-
-    async def has_edge(self, source_node_id: str, target_node_id: str, user_id: str = "default") -> bool:
-        if not self._graph.has_edge(source_node_id, target_node_id):
-            return False
-        return self._filter_by_user(self._graph.edges[source_node_id, target_node_id], user_id)
+        return node_id in self._get_user_graph(user_id)
 
     async def get_node(self, node_id: str, user_id: str = "default") -> Union[dict, None]:
-        node_data = self._graph.nodes.get(node_id)
-        if node_data and self._filter_by_user(node_data, user_id):
-            return node_data
-        return None
-
-    async def node_degree(self, node_id: str, user_id: str = "default") -> int:
-        if not await self.has_node(node_id, user_id):
-            return 0
-        return sum(
-            1 for _, _, data in self._graph.edges(node_id, data=True)
-            if self._filter_by_user(data, user_id)
-        )
-
-    async def edge_degree(self, src_id: str, tgt_id: str, user_id: str = "default") -> int:
-        src_degree = await self.node_degree(src_id, user_id)
-        tgt_degree = await self.node_degree(tgt_id, user_id)
-        return src_degree + tgt_degree
-
-    async def get_edge(
-        self, source_node_id: str, target_node_id: str, user_id: str = "default"
-    ) -> Union[dict, None]:
-        edge_data = self._graph.edges.get((source_node_id, target_node_id))
-        if edge_data and self._filter_by_user(edge_data, user_id):
-            return edge_data
-        return None
-
-    async def get_node_edges(
-        self, source_node_id: str, user_id: str = "default"
-    ) -> Union[list[tuple[str, str]], None]:
-        if not await self.has_node(source_node_id, user_id):
-            return None
-        return [
-            (source_node_id, target)
-            for target in self._graph.neighbors(source_node_id)
-            if self._filter_by_user(self._graph.edges[source_node_id, target], user_id)
-        ]
+        graph = self._get_user_graph(user_id)
+        return graph.nodes.get(node_id)
 
     async def upsert_node(self, node_id: str, node_data: dict[str, str], user_id: str = "default"):
+        graph = self._get_user_graph(user_id)
         node_data["user_id"] = user_id
-        self._graph.add_node(node_id, **node_data)
+        graph.add_node(node_id, **node_data)
+        await self._save_graph(user_id)
 
-    async def upsert_edge(
-        self, source_node_id: str, target_node_id: str, edge_data: dict[str, str], user_id: str = "default"
-    ):
+    async def has_edge(self, source_node_id: str, target_node_id: str, user_id: str = "default") -> bool:
+        graph = self._get_user_graph(user_id)
+        return graph.has_edge(source_node_id, target_node_id)
+
+    async def get_edge(self, source_node_id: str, target_node_id: str, user_id: str = "default") -> Union[dict, None]:
+        graph = self._get_user_graph(user_id)
+        return graph.edges.get((source_node_id, target_node_id))
+
+    async def upsert_edge(self, source_node_id: str, target_node_id: str, edge_data: dict[str, str], user_id: str = "default"):
+        graph = self._get_user_graph(user_id)
         edge_data["user_id"] = user_id
-        self._graph.add_edge(source_node_id, target_node_id, **edge_data)
+        graph.add_edge(source_node_id, target_node_id, **edge_data)
+        await self._save_graph(user_id)
 
     async def delete_node(self, node_id: str, user_id: str = "default"):
-        if await self.has_node(node_id, user_id):
-            self._graph.remove_node(node_id)
-            logger.info(f"Node {node_id} deleted from the graph for user {user_id}.")
-        else:
-            logger.warning(f"Node {node_id} not found in the graph for user {user_id}.")
+        graph = self._get_user_graph(user_id)
+        if node_id in graph:
+            graph.remove_node(node_id)
+            await self._save_graph(user_id)
 
-    async def embed_nodes(self, algorithm: str, user_id: str = "default") -> tuple[np.ndarray, list[str]]:
-        if algorithm not in self._node_embed_algorithms:
-            raise ValueError(f"Node embedding algorithm {algorithm} not supported")
+    async def get_node_edges(self, source_node_id: str, user_id: str = "default") -> Union[list[tuple[str, str]], None]:
+        graph = self._get_user_graph(user_id)
+        if source_node_id not in graph:
+            return None
+        return [(source_node_id, target) for target in graph.neighbors(source_node_id)]
 
-        # Create a subgraph for the user's nodes
-        user_nodes = [
-            node for node, data in self._graph.nodes(data=True)
-            if self._filter_by_user(data, user_id)
-        ]
-        user_subgraph = self._graph.subgraph(user_nodes)
+    async def node_degree(self, node_id: str, user_id: str = "default") -> int:
+        graph = self._get_user_graph(user_id)
+        return graph.degree(node_id) if node_id in graph else 0
 
-        # Run embedding on the subgraph
-        embeddings, nodes = await self._node_embed_algorithms[algorithm](user_subgraph)
-        return embeddings, nodes
+    async def _save_graph(self, user_id: str = "default"):
+        """Save the graph for a specific user."""
+        graph = self._get_user_graph(user_id)
+        graph_path = self._get_user_graph_path(user_id)
+        try:
+            nx.write_graphml(graph, graph_path)
+        except Exception as e:
+            logger.error(f"Error saving graph for user {user_id}: {e}")
 
-    async def _node2vec_embed(self, graph=None):
-        from graspologic import embed
+    async def index_done_callback(self):
+        """Save all user graphs when indexing is complete."""
+        for user_id in self._graphs:
+            await self._save_graph(user_id)
 
-        if graph is None:
-            graph = self._graph
-
-        embeddings, nodes = embed.node2vec_embed(
-            graph,
-            **self.global_config["node2vec_params"],
-        )
-
-        nodes_ids = [graph.nodes[node_id]["id"] for node_id in nodes]
-        return embeddings, nodes_ids
+    async def drop(self):
+        """Drop all user graphs."""
+        self._graphs = {}
+        if os.path.exists(self.working_dir):
+            shutil.rmtree(self.working_dir)

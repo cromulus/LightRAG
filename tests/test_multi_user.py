@@ -190,3 +190,93 @@ async def test_multi_user_filesystem_persistence(sample_texts):
         entities1_user2 = await rag.entities_vdb.query(query2, top_k=10, user_id="user2")
         entities2_user2 = await rag2.entities_vdb.query(query2, top_k=10, user_id="user2")
         assert len(entities1_user2) == len(entities2_user2)
+
+@pytest.mark.asyncio
+async def test_graph_storage_isolation():
+    """Test that graph storage properly isolates data between users."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        graph_storage = NetworkXStorage(
+            namespace="test_graph",
+            global_config={"working_dir": temp_dir},
+            embedding_func=None
+        )
+
+        # Add nodes for user1
+        await graph_storage.upsert_node("node1", {"data": "user1_data"}, user_id="user1")
+        await graph_storage.upsert_node("node2", {"data": "user1_data"}, user_id="user1")
+        await graph_storage.upsert_edge("node1", "node2", {"type": "user1_relation"}, user_id="user1")
+
+        # Add nodes for user2
+        await graph_storage.upsert_node("node1", {"data": "user2_data"}, user_id="user2")
+        await graph_storage.upsert_node("node2", {"data": "user2_data"}, user_id="user2")
+        await graph_storage.upsert_edge("node1", "node2", {"type": "user2_relation"}, user_id="user2")
+
+        # Verify user1's data
+        node1_user1 = await graph_storage.get_node("node1", user_id="user1")
+        assert node1_user1["data"] == "user1_data"
+        edge_user1 = await graph_storage.get_edge("node1", "node2", user_id="user1")
+        assert edge_user1["type"] == "user1_relation"
+
+        # Verify user2's data
+        node1_user2 = await graph_storage.get_node("node1", user_id="user2")
+        assert node1_user2["data"] == "user2_data"
+        edge_user2 = await graph_storage.get_edge("node1", "node2", user_id="user2")
+        assert edge_user2["type"] == "user2_relation"
+
+@pytest.mark.asyncio
+async def test_graph_storage_file_structure():
+    """Test that graph storage creates proper file structure for each user."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        graph_storage = NetworkXStorage(
+            namespace="test_graph",
+            global_config={"working_dir": temp_dir},
+            embedding_func=None
+        )
+
+        # Add data for different users
+        await graph_storage.upsert_node("node1", {"data": "test"}, user_id="user1")
+        await graph_storage.upsert_node("node1", {"data": "test"}, user_id="user2")
+
+        # Check directory structure
+        user1_dir = os.path.join(temp_dir, "user1")
+        user2_dir = os.path.join(temp_dir, "user2")
+
+        assert os.path.exists(user1_dir), "User1 directory should exist"
+        assert os.path.exists(user2_dir), "User2 directory should exist"
+
+        # Check for graph files in user directories
+        assert os.path.exists(os.path.join(user1_dir, "test_graph.graphml")), "User1 graph file should exist"
+        assert os.path.exists(os.path.join(user2_dir, "test_graph.graphml")), "User2 graph file should exist"
+
+@pytest.mark.asyncio
+async def test_graph_operations_user_isolation():
+    """Test that graph operations are properly isolated between users."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        graph_storage = NetworkXStorage(
+            namespace="test_graph",
+            global_config={"working_dir": temp_dir},
+            embedding_func=None
+        )
+
+        # Add node for user1
+        await graph_storage.upsert_node("shared_node", {"data": "user1_data"}, user_id="user1")
+
+        # Verify user2 cannot see or modify user1's node
+        assert not await graph_storage.has_node("shared_node", user_id="user2")
+
+        # Add same node ID for user2
+        await graph_storage.upsert_node("shared_node", {"data": "user2_data"}, user_id="user2")
+
+        # Verify each user sees their own version
+        node_user1 = await graph_storage.get_node("shared_node", user_id="user1")
+        node_user2 = await graph_storage.get_node("shared_node", user_id="user2")
+
+        assert node_user1["data"] == "user1_data"
+        assert node_user2["data"] == "user2_data"
+
+        # Delete node for user1
+        await graph_storage.delete_node("shared_node", user_id="user1")
+
+        # Verify user2's node still exists
+        assert not await graph_storage.has_node("shared_node", user_id="user1")
+        assert await graph_storage.has_node("shared_node", user_id="user2")
